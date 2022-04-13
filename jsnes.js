@@ -49,287 +49,6 @@ function ROM() {
     };
 }
 
-var Mappers = {};
-Mappers[0] = function(obj) 
-    var cpu = obj.cpu;
-    var ppu = obj.ppu;
-    var papu = obj.papu;
-    var controllers = obj.controllers;
-    
-    function copyArray(src, srcIndex, dst, dstIndex, len) {
-        for(var i = 0; i < len; i++) {
-            dst[dstIndex + i] = src[srcIndex + i];
-        }
-    }
-    
-    function regWrite(address, value) {
-        switch(address) {
-            case 0x2000:
-                // PPU Control register 1
-                cpu.mem[address] = value;
-                ppu.updateControlReg1(value);
-                break;
-            case 0x2001:
-                // PPU Control register 2
-                cpu.mem[address] = value;
-                ppu.updateControlReg2(value);
-                break;
-            case 0x2003:
-                // Set Sprite RAM address
-                ppu.writeSRAMAddress(value);
-                break;
-            case 0x2004:
-                // Write to Sprite RAM
-                ppu.sramWrite(value);
-                break;
-            case 0x2005:
-                // Screen Scroll offsets
-                ppu.scrollWrite(value);
-                break;
-            case 0x2006:
-                // Set VRAM address
-                ppu.writeVRAMAddress(value);
-                break;
-            case 0x2007:
-                // Write to VRAM
-                ppu.vramWrite(value);
-                break;
-            case 0x4014:
-                // Sprite Memory DMA Access
-                ppu.sramDMA(value);
-                break;
-            case 0x4015:
-                // Sound Channel Switch, DMC Status
-                papu.writeReg(address, value);
-                break;
-            case 0x4016:
-                // Joystick 1 + Strobe
-                if((value & 1) === 0 && (this.joypadLastWrite & 1) === 1) {
-                    this.joy1StrobeState = 0;
-                    this.joy2StrobeState = 0;
-                }
-                this.joypadLastWrite = value;
-                break;
-            case 0x4017:
-                // Sound channel frame sequencer
-                papu.writeReg(address, value);
-                break;
-            default:
-                // Sound registers
-                if(address >= 0x4000 && address <= 0x4017) {
-                    papu.writeReg(address, value);
-                }
-        }
-    }
-    
-    function regLoad(address) {
-        // use fourth nibble (0xF000)
-        switch(address >> 12) {
-            case 0:
-                break;
-            case 1:
-                break;
-            case 2:
-                // Fall through to case 3
-            case 3:
-                // PPU Registers
-                switch(address & 0x7) {
-                    case 0x0:
-                        // 0x2000
-                        // PPU Control Register 1
-                        // (the value is stored both
-                        // in main memory and in the
-                        // PPU as flags)
-                        // (not in the real NES)
-                        return cpu.mem[0x2000];
-                    case 0x1:
-                        // 0x2001
-                        // PPU Control Register 2
-                        // (the value is stored both
-                        // in main memory and in the
-                        // PPU as flags)
-                        // (not in the real NES)
-                        return cpu.mem[0x2001];
-                    case 0x2:
-                        // 0x2002
-                        // PPU Status Register
-                        // The value is stored in
-                        // main memory in addition
-                        // to as flags in the PPU
-                        // (not in the real NES)
-                        return ppu.readStatusRegister();
-                    case 0x3:
-                        return 0;
-                    case 0x4:
-                        // 0x2004
-                        // Sprite Memory read
-                        return ppu.sramLoad();
-                    case 0x5:
-                        return 0;
-                    case 0x6:
-                        return 0;
-                    case 0x7:
-                        // 0x2007
-                        // VRAM read
-                        return ppu.vramLoad();
-                }
-                break;
-            case 4:
-                // Sound+Joypad registers
-                switch(address - 0x4015) {
-                    case 0:
-                        // 0x4015:
-                        // Sound channel enable, DMC Status
-                        return papu.readReg(address);
-                    case 1:
-                        // 0x4016:
-                        // Joystick 1 + Strobe
-                        return joy1Read();
-                    case 2:
-                        // 0x4017:
-                        // Joystick 2 + Strobe
-                        // https://wiki.nesdev.com/w/index.php/Zapper
-                        var w;
-                        if(
-                            this.zapperX !== null &&
-                            this.zapperY !== null &&
-                            ppu.isPixelWhite(this.zapperX, this.zapperY)
-                        ) {
-                            w = 0;
-                        } else {
-                            w = 0x1 << 3;
-                        }
-                        if(this.zapperFired) {
-                            w |= 0x1 << 4;
-                        }
-                        return (joy2Read() | w) & 0xffff;
-                }
-                break;
-        }
-        return 0;
-    }
-    
-    function joy1Read() {
-        var ret;
-        switch(this.joy1StrobeState) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-                ret = controllers[1].state[this.joy1StrobeState];
-                break;
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-                ret = 0;
-                break;
-            case 19:
-                ret = 1;
-                break;
-            default:
-                ret = 0;
-        }
-        this.joy1StrobeState++;
-        if(this.joy1StrobeState === 24) {
-            this.joy1StrobeState = 0;
-        }
-        return ret;
-    }
-    
-    function joy2Read() {
-        var ret;
-        switch(this.joy2StrobeState) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-                ret = controllers[2].state[this.joy2StrobeState];
-                break;
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-                ret = 0;
-                break;
-            case 19:
-                ret = 1;
-                break;
-            default:
-                ret = 0;
-        }
-
-        this.joy2StrobeState++;
-        if(this.joy2StrobeState === 24) {
-            this.joy2StrobeState = 0;
-        }
-        return ret;
-    }
-    
-    this.reset = function() {
-        this.joy1StrobeState = 0;
-        this.joy2StrobeState = 0;
-        this.joypadLastWrite = 0;
-        this.zapperFired = false;
-        this.zapperX = null;
-        this.zapperY = null;
-    };
-    
-    this.write = function(address, value) {
-        if(address < 0x2000) {
-            // Mirroring of RAM
-            cpu.mem[address & 0x7ff] = value;
-        } else if(address > 0x4017) {
-            cpu.mem[address] = value;
-            if(address >= 0x6000 && address < 0x8000) {
-                // Write to persistent RAM
-            }
-        } else if(address > 0x2007 && address < 0x4000) {
-            regWrite(0x2000 + (address & 0x7), value);
-        } else {
-            regWrite(address, value);
-        }
-    };
-    
-    this.load = function(address) {
-        // Wrap around
-        address &= 0xffff;
-        // Check address range
-        if(address > 0x4017) {
-            // ROM
-            return cpu.mem[address];
-        } else if(address >= 0x2000) {
-            // I/O Port
-            return regLoad(address);
-        } else {
-            // RAM (mirrored)
-            return cpu.mem[address & 0x7ff];
-        }
-    };
-};
-
 function CPU() {
     this.reset = function() {
         this.mem = [];
@@ -354,7 +73,7 @@ function CPU() {
         // Index Register(Y)
         this.regY = 0;
         // Program Counter(PC)
-        this.regPC = 0x8000 - 1;
+        this.regPC = 0xC000;
         // Stack Pointer(SP)
         this.regSP = 0x01ff;
         // Processor Status(P)
@@ -377,18 +96,7 @@ function CPU() {
         // Carry(0)
         this.flagC = 0;
         
-        this.regPC2 = this.regPC;
-        this.flagI2 = this.flagI;
-        this.flagB2 = this.flagB;
-        this.isIRQ = false;
-        this.irqType = null;
-        
-        // Interrupt Request
-        var IRQ = 0;
-        // Non-Maskable Interrupt
-        var NMI = 1;
-        // Reset
-        var RESET = 2;
+        this.cycles = 7;
         
         // Zero Page,X
         var ZP_X = 0;
@@ -778,46 +486,130 @@ function CPU() {
         };
     };
     
-    this.simulate = function() {
-        // Check interrupt
-        if(this.isIRQ) {
-            var status = this.getStatus();
-            this.regPC2 = this.regPC;
-            this.flagI2 = this.flagI;
-            switch(this.irqType) {
-                // Interrupt Request
-                case IRQ:
-                    if(this.flagI !== 0) {
-                        break;
-                    }
-                    this.doIRQ(status);
-                    break;
-                
-                // Non-Maskable Interrupt
-                case NMI:
-                    this.doNMI(status);
-                    break;
-                
-                // Reset
-                case RESET:
-                    this.doReset();
-                    break;
-            }
-            this.regPC = this.regPC2;
-            this.flagI = this.flagI2;
-            this.flagB = this.flagB2;
-            this.isIRQ = false;
+    this.regLoad = function(address) {
+        // use fourth nibble(0xF000)
+        switch(address >> 12) {
+            case 0:
+                break;
+            
+            case 1:
+                break;
+            
+            case 2:
+                // Fall through to case 3
+            case 3:
+                // PPU Registers
+                switch(address & 0x7) {
+                    case 0x0:
+                        // 0x2000:
+                        // PPU Control Register 1.
+                        // (the value is stored both
+                        // in main memory and in the
+                        // PPU as flags):
+                        // (not in the real NES)
+                        return this.mem[0x2000];
+
+                    case 0x1:
+                        // 0x2001:
+                        // PPU Control Register 2.
+                        // (the value is stored both
+                        // in main memory and in the
+                        // PPU as flags):
+                        // (not in the real NES)
+                        return this.mem[0x2001];
+
+                    case 0x2:
+                        // 0x2002:
+                        // PPU Status Register.
+                        // The value is stored in
+                        // main memory in addition
+                        // to as flags in the PPU.
+                        // (not in the real NES)
+                        return 0;
+
+                    case 0x3:
+                        return 0;
+
+                    case 0x4:
+                        // 0x2004:
+                        // Sprite Memory read.
+                        return 0;
+                    case 0x5:
+                        return 0;
+
+                    case 0x6:
+                        return 0;
+
+                    case 0x7:
+                        // 0x2007:
+                        // VRAM read:
+                        return 0;
+                }
+                break;
+            case 4:
+                // Sound+Joypad registers
+                switch (address - 0x4015) {
+                    case 0:
+                        // 0x4015:
+                        // Sound channel enable, DMC Status
+                        return 0;
+
+                    case 1:
+                        // 0x4016:
+                        // Joystick 1 + Strobe
+                        return 0;
+
+                    case 2:
+                        // 0x4017:
+                        // Joystick 2 + Strobe
+                        // https://wiki.nesdev.com/w/index.php/Zapper
+                        return 0;
+                }
+                break;
         }
-        
-        var opInf = this.opData[this.regPC + 1];
-        var mode = opInf.mode;
-        var cycle = opInf.cycle;
-        var cycleAdd = 0;
+        return 0;
+    };
+    
+    this.mmap = function(address) {
+        // Wrap around
+        address &= 0xffff;
+        // Check address range
+        if(address > 0x4017) {
+            // ROM
+            return this.mem[address];
+        } else if(address >= 0x2000) {
+            // I/O Port
+            return this.regLoad(address);
+        } else {
+            // RAM(mirrored)
+            return this.mem[address & 0x7ff];
+        }
+    };
+    
+    this.load = function(address) {
+        if(address < 0x2000) {
+            return this.mem[address & 0x7ff];
+        } else {
+            return this.mmap(address);
+        }
+    };
+    
+    this.load16bit = function(address) {
+        if(address < 0x1fff) {
+            return this.mem[address & 0x7ff] 
+                | (this.mem[(address + 1) & 0x7ff] << 8);
+        } else {
+            return this.mmap(address) | (this.mmap(address + 1) << 8);
+        }
+    };
+    
+    this.simulate = function() {
         var opAddr = this.regPC;
+        var opInf = this.opData[opAddr];
         this.regPC += opInf.len;
+        this.cycles += opInf.cycle;
         var addr = 0;
-        
-        switch(mode) {
+        switch(opInf.mode) {
             // Zero Page,X
             case ZP_X:
                 break;
@@ -1332,53 +1124,6 @@ function CPU() {
                 break;
         }
     };
-    
-    this.doIRQ = function(status) {
-        
-    };
-    
-    this.doNMI = function(status) {
-        
-    };
-    
-    this.doReset = function() {
-        
-    };
-    
-    this.getStatus = function() {
-        return this.flagC
-            | (this.flagZ << 1)
-            | (this.flagI << 2)
-            | (this.flagD << 3)
-            | (this.flagB << 4)
-            | (this.flagU << 5)
-            | (this.flagV << 6)
-            | (this.flagN << 7);
-    };
-    
-    this.setStatus = function(status) {
-        this.flagN = (status >> 7) & 1;
-        this.flagV = (status >> 6) & 1;
-        this.flagU = (status >> 5) & 1;
-        this.flagB = (status >> 4) & 1;
-        this.flagD = (status >> 3) & 1;
-        this.flagI = (status >> 2) & 1;
-        this.flagZ = (status >> 1) & 1;
-        this.flagC = status & 1;
-    };
-}
-
-function JSNES() {
-    this.rom = new ROM();
-    this.cpu = new CPU();
-    this.mapper = new Mappers[0]();
-    
-    this.loadROM = function(buf) {
-        this.rom.load(buf);
-        this.cpu.reset();
-        this.mapper.loadPRGROM(this.rom.prgBanks, this.cpu.mem);
-        this.mapper.loadCHRROM(this.rom.chrBanks, this.cpu.mem);
-    };
 }
 
 function httpGet(url, responseType, callback) {
@@ -1405,8 +1150,6 @@ function httpGet(url, responseType, callback) {
 
 httpGet('./test.nes', 'arraybuffer', function(res) {
     var buf = new Uint8Array(res);
-    var jsnes = new JSNES();
-    jsnes.loadROM(buf);
     
 });
 
