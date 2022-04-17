@@ -550,7 +550,7 @@ CPU.prototype = {
     emulate: function() {
         var temp;
         var add;
-
+        
         // Check interrupts:
         if (this.irqRequested) {
             temp =
@@ -596,7 +596,6 @@ CPU.prototype = {
             this.F_BRK = this.F_BRK_NEW;
             this.irqRequested = false;
         }
-
         var opinf = this.opdata[this.nes.mmap.load(this.REG_PC + 1)];
         var cycleCount = opinf >> 24;
         var cycleAdd = 0;
