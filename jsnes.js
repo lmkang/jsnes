@@ -1,112 +1,400 @@
-function ROM() {
-    this.load = function(buf) {
-        if(buf[0] !== 0x4e
-            || buf[1] !== 0x45
-            || buf[2] !== 0x53
-            || buf[3] !== 0x1a) {
-            throw new Error('Not a valid nes');
-        }
-        
-        // PRG-ROM count(16KB)
-        this.prgCount = buf[4];
-        // CHR-ROM count(4KB)
-        this.chrCount = buf[5];
-        // 0-horizontal, 1-vertical
-        this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
-        this.batteryRAM = buf[6] & 2 > 0 ? 1 : 0;
-        this.trainer = buf[6] & 4 > 0 ? 1 : 0;
-        this.fourScreen = buf[6] & 8 > 0 ? 1 : 0;
-        this.mapperType = (buf[6] >> 4) | (buf[7] & 0xf0);
-        
-        console.log('mirroring: ' + this.mirroring);
-        console.log('batteryRAM: ' + this.batteryRAM);
-        console.log('trainer: ' + this.trainer);
-        console.log('fourScreen: ' + this.fourScreen);
-        console.log('mapperType: ' + this.mapperType);
-        
-        var offset = 16;
-        if(this.trainer) {
-            offset += 512;
-        }
-        // PRG-ROM banks
-        this.prgBanks = [];
-        for(var i = 0; i < this.prgCount; i++) {
-            this.prgBanks[i] = [];
-            for(var j = 0; j < 16384; j++) {
-                this.prgBanks[i][j] = buf[offset + j];
-            }
-            offset += 16384;
-        }
-        // CHR-ROM banks
-        this.chrBanks = [];
-        for(var i = 0; i < this.chrCount; i++) {
-            this.chrBanks[i] = [];
-            for(var j = 0; j < 4096; j++) {
-                this.chrBanks[i][j] = buf[offset + j];
-            }
-            offset += 4096;
-        }
-    };
-}
-
-var Mappers = {};
-Mappers[0] = function() {
-    function copyArray(src, index1, dst, index2, len) {
-        for(var i = 0; i < len; i++) {
-            dst[index2++] = src[index1++];
-        }
-    }
-    
-    this.loadROM = function(rom, mem) {
-        // load PRG-ROM
-        if(rom.prgCount > 1) {
-            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            copyArray(rom.prgBanks[1], 0, mem, 0xc000, 16384);
-        } else {
-            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            copyArray(rom.prgBanks[0], 0, mem, 0xc000, 16384);
-        }
-        // load CHR-ROM
-        
-    };
-};
-
 function CPU() {
-    // Zero Page,X
-    var ZERO_PAGE_X = 1;
-    // Zero Page,Y
-    var ZERO_PAGE_Y = 2;
-    // Absolute,X
-    var ABSOLUTE_X = 3;
-    // Absolute,Y
-    var ABSOLUTE_Y = 4;
-    // Indirect,X
-    var INDIRECT_X = 5;
-    // Indirect,Y
-    var INDIRECT_Y = 6;
-    // Implicit
-    var IMPLICIT = 7;
-    // Accumulator
-    var ACCUMULATOR = 8;
-    // Immediate
-    var IMMEDIATE = 9;
-    // Zero Page
-    var ZERO_PAGE = 10;
-    // Absolute
-    var ABSOLUTE = 11;
-    // Relative
-    var RELATIVE = 12;
-    // Indirect
-    var INDIRECT = 13;
+    var ZERO_PAGE = 0;
+    var RELATIVE = 1;
+    var IMPLIED = 2;
+    var ABSOLUTE = 3;
+    var ACCUMULATOR = 4;
+    var IMMEDIATE = 5;
+    var ZERO_PAGE_X = 6;
+    var ZERO_PAGE_Y = 7;
+    var ABSOLUTE_X = 8;
+    var ABSOLUTE_Y = 9;
+    var INDIRECT_X = 10;
+    var INDIRECT_Y = 11;
+    var INDIRECT = 12;
     
-    // interrupt request
-    var IRQ_NORMAL = 1;
-    // Non-maskable interrupt
-    var IRQ_NMI = 2;
-    // reset
-    var IRQ_RESET = 3;
+    var ADC = 0;
+    var AND = 1;
+    var ASL = 2;
+    var BCC = 3;
+    var BCS = 4;
+    var BEQ = 5;
+    var BIT = 6;
+    var BMI = 7;
+    var BNE = 8;
+    var BPL = 9;
+    var BRK = 10;
+    var BVC = 11;
+    var BVS = 12;
+    var CLC = 13;
+    var CLD = 14;
+    var CLI = 15;
+    var CLV = 16;
+    var CMP = 17;
+    var CPX = 18;
+    var CPY = 19;
+    var DEC = 20;
+    var DEX = 21;
+    var DEY = 22;
+    var EOR = 23;
+    var INC = 24;
+    var INX = 25;
+    var INY = 26;
+    var JMP = 27;
+    var JSR = 28;
+    var LDA = 29;
+    var LDX = 30;
+    var LDY = 31;
+    var LSR = 32;
+    var NOP = 33;
+    var ORA = 34;
+    var PHA = 35;
+    var PHP = 36;
+    var PLA = 37;
+    var PLP = 38;
+    var ROL = 39;
+    var ROR = 40;
+    var RTI = 41;
+    var RTS = 42;
+    var SBC = 43;
+    var SEC = 44;
+    var SED = 45;
+    var SEI = 46;
+    var STA = 47;
+    var STX = 48;
+    var STY = 49;
+    var TAX = 50;
+    var TAY = 51;
+    var TSX = 52;
+    var TXA = 53;
+    var TXS = 54;
+    var TYA = 55;
+    var ALR = 56;
+    var ANC = 57;
+    var ARR = 58;
+    var AXS = 59;
+    var LAX = 60;
+    var SAX = 61;
+    var DCP = 62;
+    var ISC = 63;
+    var RLA = 64;
+    var RRA = 65;
+    var SLO = 66;
+    var SRE = 67;
+    var SKB = 68;
+    var IGN = 69;
+    
+    var OP_DATA = {
+        // http://6502.org/tutorials/6502opcodes.html
+        
+        // ADC
+        0x69: {name: ADC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x65: {name: ADC, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x75: {name: ADC, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x6D: {name: ADC, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x7D: {name: ADC, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x79: {name: ADC, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0x61: {name: ADC, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x71: {name: ADC, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // AND
+        0x29: {name: AND, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x25: {name: AND, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x35: {name: AND, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x2D: {name: AND, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x3D: {name: AND, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x39: {name: AND, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0x21: {name: AND, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x31: {name: AND, mode: INDIRECT_Y , len: 2, cycle: 5},
+
+        // ASL
+        0x0A: {name: ASL, mode: ACCUMULATOR, len: 1, cycle: 2},
+        0x06: {name: ASL, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x16: {name: ASL, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x0E: {name: ASL, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x1E: {name: ASL, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // BIT
+        0x24: {name: BIT, mode: ZERO_PAGE, len: 2, cycle: 3},
+        0x2C: {name: BIT, mode: ABSOLUTE , len: 3, cycle: 4},
+        
+        // Branch Instructions
+        0x10: {name: BPL, mode: RELATIVE, len: 2, cycle: 2},
+        0x30: {name: BMI, mode: RELATIVE, len: 2, cycle: 2},
+        0x50: {name: BVC, mode: RELATIVE, len: 2, cycle: 2},
+        0x70: {name: BVS, mode: RELATIVE, len: 2, cycle: 2},
+        0x90: {name: BCC, mode: RELATIVE, len: 2, cycle: 2},
+        0xB0: {name: BCS, mode: RELATIVE, len: 2, cycle: 2},
+        0xD0: {name: BNE, mode: RELATIVE, len: 2, cycle: 2},
+        0xF0: {name: BEQ, mode: RELATIVE, len: 2, cycle: 2},
+        
+        // BRK
+        0x00: {name: BRK, mode: IMPLIED, len: 1, cycle: 7},
+        
+        // CMP
+        0xC9: {name: CMP, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xC5: {name: CMP, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xD5: {name: CMP, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xCD: {name: CMP, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xDD: {name: CMP, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0xD9: {name: CMP, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0xC1: {name: CMP, mode: INDIRECT_X , len: 2, cycle: 6},
+        0xD1: {name: CMP, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // CPX
+        0xE0: {name: CPX, mode: IMMEDIATE, len: 2, cycle: 2},
+        0xE4: {name: CPX, mode: ZERO_PAGE, len: 2, cycle: 3},
+        0xEC: {name: CPX, mode: ABSOLUTE , len: 3, cycle: 4},
+        
+        // CPY
+        0xC0: {name: CPY, mode: IMMEDIATE, len: 2, cycle: 2},
+        0xC4: {name: CPY, mode: ZERO_PAGE, len: 2, cycle: 3},
+        0xCC: {name: CPY, mode: ABSOLUTE , len: 3, cycle: 4},
+        
+        // DEC
+        0xC6: {name: DEC, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0xD6: {name: DEC, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0xCE: {name: DEC, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0xDE: {name: DEC, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // EOR
+        0x49: {name: EOR, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x45: {name: EOR, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x55: {name: EOR, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x4D: {name: EOR, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x5D: {name: EOR, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x59: {name: EOR, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0x41: {name: EOR, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x51: {name: EOR, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // Flag(Processor Status) Instructions
+        0x18: {name: CLC, mode: IMPLIED, len: 1, cycle: 2},
+        0x38: {name: SEC, mode: IMPLIED, len: 1, cycle: 2},
+        0x58: {name: CLI, mode: IMPLIED, len: 1, cycle: 2},
+        0x78: {name: SEI, mode: IMPLIED, len: 1, cycle: 2},
+        0xB8: {name: CLV, mode: IMPLIED, len: 1, cycle: 2},
+        0xD8: {name: CLD, mode: IMPLIED, len: 1, cycle: 2},
+        0xF8: {name: SED, mode: IMPLIED, len: 1, cycle: 2},
+        
+        // INC
+        0xE6: {name: INC, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0xF6: {name: INC, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0xEE: {name: INC, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0xFE: {name: INC, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // JMP
+        0x4C: {name: JMP, mode: ABSOLUTE, len: 3, cycle: 3},
+        0x6C: {name: JMP, mode: INDIRECT, len: 3, cycle: 5},
+        
+        // JSR
+        0x20: {name: JSR, mode: ABSOLUTE, len: 3, cycle: 6},
+        
+        // LDA
+        0xA9: {name: LDA, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xA5: {name: LDA, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xB5: {name: LDA, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xAD: {name: LDA, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xBD: {name: LDA, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0xB9: {name: LDA, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0xA1: {name: LDA, mode: INDIRECT_X , len: 2, cycle: 6},
+        0xB1: {name: LDA, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // LDX
+        0xA2: {name: LDX, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xA6: {name: LDX, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xB6: {name: LDX, mode: ZERO_PAGE_Y, len: 2, cycle: 4},
+        0xAE: {name: LDX, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xBE: {name: LDX, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        
+        // LDY
+        0xA0: {name: LDY, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xA4: {name: LDY, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xB4: {name: LDY, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xAC: {name: LDY, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xBC: {name: LDY, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        
+        // LSR
+        0x4A: {name: LSR, mode: ACCUMULATOR, len: 1, cycle: 2},
+        0x46: {name: LSR, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x56: {name: LSR, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x4E: {name: LSR, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x5E: {name: LSR, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // NOP
+        0xEA: {name: NOP, mode: IMPLIED, len: 1, cycle: 2},
+        
+        // ORA
+        0x09: {name: ORA, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x05: {name: ORA, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x15: {name: ORA, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x0D: {name: ORA, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x1D: {name: ORA, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x19: {name: ORA, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0x01: {name: ORA, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x11: {name: ORA, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // Register Instructions
+        0xAA: {name: TAX, mode: IMPLIED, len: 1, cycle: 2},
+        0x8A: {name: TXA, mode: IMPLIED, len: 1, cycle: 2},
+        0xCA: {name: DEX, mode: IMPLIED, len: 1, cycle: 2},
+        0xE8: {name: INX, mode: IMPLIED, len: 1, cycle: 2},
+        0xA8: {name: TAY, mode: IMPLIED, len: 1, cycle: 2},
+        0x98: {name: TYA, mode: IMPLIED, len: 1, cycle: 2},
+        0x88: {name: DEY, mode: IMPLIED, len: 1, cycle: 2},
+        0xC8: {name: INY, mode: IMPLIED, len: 1, cycle: 2},
+        
+        // ROL
+        0x2A: {name: ROL, mode: ACCUMULATOR, len: 1, cycle: 2},
+        0x26: {name: ROL, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x36: {name: ROL, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x2E: {name: ROL, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x3E: {name: ROL, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // ROR
+        0x6A: {name: ROR, mode: ACCUMULATOR, len: 1, cycle: 2},
+        0x66: {name: ROR, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x76: {name: ROR, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x6E: {name: ROR, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x7E: {name: ROR, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // RTI
+        0x40: {name: RTI, mode: IMPLIED, len: 1, cycle: 6},
+        
+        // RTS
+        0x60: {name: RTS, mode: IMPLIED, len: 1, cycle: 6},
+        
+        // SBC
+        0xE9: {name: SBC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xE5: {name: SBC, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xF5: {name: SBC, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xED: {name: SBC, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xFD: {name: SBC, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0xF9: {name: SBC, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0xE1: {name: SBC, mode: INDIRECT_X , len: 2, cycle: 6},
+        0xF1: {name: SBC, mode: INDIRECT_Y , len: 2, cycle: 5},
+        
+        // STA
+        0x85: {name: STA, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x95: {name: STA, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x8D: {name: STA, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x9D: {name: STA, mode: ABSOLUTE_X , len: 3, cycle: 5},
+        0x99: {name: STA, mode: ABSOLUTE_Y , len: 3, cycle: 5},
+        0x81: {name: STA, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x91: {name: STA, mode: INDIRECT_Y , len: 2, cycle: 6},
+        
+        // Stack Instructions
+        0x9A: {name: TXS, mode: IMPLIED, len: 1, cycle: 2},
+        0xBA: {name: TSX, mode: IMPLIED, len: 1, cycle: 2},
+        0x48: {name: PHA, mode: IMPLIED, len: 1, cycle: 3},
+        0x68: {name: PLA, mode: IMPLIED, len: 1, cycle: 4},
+        0x08: {name: PHP, mode: IMPLIED, len: 1, cycle: 3},
+        0x28: {name: PLP, mode: IMPLIED, len: 1, cycle: 4},
+        
+        // STX
+        0x86: {name: STX, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x96: {name: STX, mode: ZERO_PAGE_Y, len: 2, cycle: 4},
+        0x8E: {name: STX, mode: ABSOLUTE   , len: 3, cycle: 4},
+        
+        // STY
+        0x84: {name: STY, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x94: {name: STY, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x8C: {name: STY, mode: ABSOLUTE   , len: 3, cycle: 4},
+        
+        // https://www.nesdev.org/wiki/Programming_with_unofficial_opcodes
+        
+        // Combined operations
+        0x4B: {name: ALR, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x0B: {name: ANC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x2B: {name: ANC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x6B: {name: ARR, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xCB: {name: AXS, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xA3: {name: LAX, mode: INDIRECT_X , len: 2, cycle: 6},
+        0xA7: {name: LAX, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0xAF: {name: LAX, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0xB3: {name: LAX, mode: INDIRECT_Y , len: 2, cycle: 5},
+        0xB7: {name: LAX, mode: ZERO_PAGE_Y, len: 2, cycle: 4},
+        0xBF: {name: LAX, mode: ABSOLUTE_Y , len: 3, cycle: 4},
+        0x83: {name: SAX, mode: INDIRECT_X , len: 2, cycle: 6},
+        0x87: {name: SAX, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x8F: {name: SAX, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x97: {name: SAX, mode: ZERO_PAGE_Y, len: 2, cycle: 4},
+        
+        // RMW instructions
+        0xC3: {name: DCP, mode: INDIRECT_X , len: 2, cycle: 8},
+        0xC7: {name: DCP, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0xCF: {name: DCP, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0xD3: {name: DCP, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0xD7: {name: DCP, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0xDB: {name: DCP, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0xDF: {name: DCP, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        0xE3: {name: ISC, mode: INDIRECT_X , len: 2, cycle: 8},
+        0xE7: {name: ISC, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0xEF: {name: ISC, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0xF3: {name: ISC, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0xF7: {name: ISC, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0xFB: {name: ISC, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0xFF: {name: ISC, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        0x23: {name: RLA, mode: INDIRECT_X , len: 2, cycle: 8},
+        0x27: {name: RLA, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x2F: {name: RLA, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x33: {name: RLA, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0x37: {name: RLA, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x3B: {name: RLA, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0x3F: {name: RLA, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        0x63: {name: RRA, mode: INDIRECT_X , len: 2, cycle: 8},
+        0x67: {name: RRA, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x6F: {name: RRA, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x73: {name: RRA, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0x77: {name: RRA, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x7B: {name: RRA, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0x7F: {name: RRA, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        0x03: {name: SLO, mode: INDIRECT_X , len: 2, cycle: 8},
+        0x07: {name: SLO, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x0F: {name: SLO, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x13: {name: SLO, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0x17: {name: SLO, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x1B: {name: SLO, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0x1F: {name: SLO, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        0x43: {name: SRE, mode: INDIRECT_X , len: 2, cycle: 8},
+        0x47: {name: SRE, mode: ZERO_PAGE  , len: 2, cycle: 5},
+        0x4F: {name: SRE, mode: ABSOLUTE   , len: 3, cycle: 6},
+        0x53: {name: SRE, mode: INDIRECT_Y , len: 2, cycle: 8},
+        0x57: {name: SRE, mode: ZERO_PAGE_X, len: 2, cycle: 6},
+        0x5B: {name: SRE, mode: ABSOLUTE_Y , len: 3, cycle: 7},
+        0x5F: {name: SRE, mode: ABSOLUTE_X , len: 3, cycle: 7},
+        
+        // NOPs
+        0x1A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0x3A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0x5A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0x7A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0xDA: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0xFA: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
+        0x80: {name: SKB, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x82: {name: SKB, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x89: {name: SKB, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xC2: {name: SKB, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xE2: {name: SKB, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0x0C: {name: IGN, mode: ABSOLUTE   , len: 3, cycle: 4},
+        0x1C: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x3C: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x5C: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x7C: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0xDC: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0xFC: {name: IGN, mode: ABSOLUTE_X , len: 3, cycle: 4},
+        0x04: {name: IGN, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x44: {name: IGN, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x64: {name: IGN, mode: ZERO_PAGE  , len: 2, cycle: 3},
+        0x14: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x34: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x54: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0x74: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xD4: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+        0xF4: {name: IGN, mode: ZERO_PAGE_X, len: 2, cycle: 4},
+    };
     
     this.reset = function() {
+        // Main memory
         this.mem = [];
         for(var i = 0; i < 0x2000; i++) {
             this.mem[i] = 0xff;
@@ -114,530 +402,122 @@ function CPU() {
         for(var i = 0; i < 4; i++) {
             var j = i * 0x800;
             this.mem[j + 0x008] = 0xf7;
-            this.mem[j + 0x009] = 0xe7;
-            this.mem[j + 0x00a] = 0xd7;
-            this.mem[j + 0x00f] = 0xb7;
+            this.mem[j + 0x009] = 0xef;
+            this.mem[j + 0x00a] = 0xdf;
+            this.mem[j + 0x00f] = 0xbf;
         }
-        for(var i = 0x2001; i < this.mem.length; i++) {
+        for(var i = 0x2001; i < 0x10000; i++) {
             this.mem[i] = 0;
         }
         
-        // Accumulator(A)
+        // CPU Registers
         this.regA = 0;
-        // Index Register(X)
         this.regX = 0;
-        // Index Register(Y)
         this.regY = 0;
-        // Program Counter(PC)
-        this.regPC = 0xC000;
-        // Stack Pointer(SP)
-        this.regSP = 0x01fd;
+        this.regSP = 0x01ff;
+        this.regPC = 0xC000 - 1;
         
-        // Negative(7)
-        this.flagN = 0;
-        // Overflow(6)
-        this.flagV = 0;
-        // Break(4)
-        this.flagB = 0;
-        // Decimal mode(3)
-        this.flagD = 0;
-        // Interrupt(2)
-        this.flagI = 1;
-        // Zero(1)
-        this.flagZ = 0;
-        // Carry(0)
+        // flags
         this.flagC = 0;
+        this.flagZ = 0;
+        this.flagI = 0;
+        this.flagD = 0;
+        this.flagB = 0;
+        this.flagU = 1;
+        this.flagV = 0;
+        this.flagN = 0;
         
         this.cycles = 7;
-        
-        this.opData = {
-            // ADC(ADd with Carry)
-            0x69: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0x65: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x75: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x6D: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x7D: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x79: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0x61: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x71: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // AND(bitwise AND with accumulator)
-            0x29: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0x25: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x35: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x2D: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x3D: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x39: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0x21: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x31: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // ASL(Arithmetic Shift Left)
-            0x0A: {mode: ACCUMULATOR, len: 1, cycle: 2},
-            0x06: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x16: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x0E: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x1E: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // BIT(test BITs)
-            0x24: {mode: ZERO_PAGE,  len: 2, cycle: 3},
-            0x2C: {mode: ABSOLUTE,   len: 3, cycle: 4},
-            
-            // Branch Instructions
-            // BPL(Branch on PLus)
-            0x10: {mode: RELATIVE, len: 2, cycle: 2},
-            // BMI(Branch on MInus)
-            0x30: {mode: RELATIVE, len: 2, cycle: 2},
-            // BVC(Branch on oVerflow Clear)
-            0x50: {mode: RELATIVE, len: 2, cycle: 2},
-            // BVS(Branch on oVerflow Set)
-            0x70: {mode: RELATIVE, len: 2, cycle: 2},
-            // BCC(Branch on Carry Clear)
-            0x90: {mode: RELATIVE, len: 2, cycle: 2},
-            // BCS(Branch on Carry Set)
-            0xB0: {mode: RELATIVE, len: 2, cycle: 2},
-            // BNE (Branch on Not Equal)
-            0xD0: {mode: RELATIVE, len: 2, cycle: 2},
-            // BEQ(Branch on EQual)
-            0xF0: {mode: RELATIVE, len: 2, cycle: 2},
-            
-            // BRK(BReaK)
-            0x00: {mode: IMPLICIT, len: 1, cycle: 7},
-            
-            // CMP(CoMPare accumulator)
-            0xC9: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0xC5: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xD5: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xCD: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xDD: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0xD9: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0xC1: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0xD1: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // CPX(ComPare X register)
-            0xE0: {mode: IMMEDIATE,  len: 2, cycle: 2},
-            0xE4: {mode: ZERO_PAGE,  len: 2, cycle: 3},
-            0xEC: {mode: ABSOLUTE,   len: 3, cycle: 4},
-            
-            // CPY(ComPare Y register)
-            0xC0: {mode: IMMEDIATE,  len: 2, cycle: 2},
-            0xC4: {mode: ZERO_PAGE,  len: 2, cycle: 3},
-            0xCC: {mode: ABSOLUTE,   len: 3, cycle: 4},
-            
-            // DEC(DECrement memory)
-            0xC6: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0xD6: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0xCE: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0xDE: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // EOR(bitwise Exclusive OR)
-            0x49: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0x45: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x55: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x4D: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x5D: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x59: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0x41: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x51: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // Flag(Processor Status) Instructions
-            // CLC(CLear Carry)
-            0x18: {mode: IMPLICIT, len: 1, cycle: 2},
-            // SEC(SEt Carry)
-            0x38: {mode: IMPLICIT, len: 1, cycle: 2},
-            // CLI(CLear Interrupt)
-            0x58: {mode: IMPLICIT, len: 1, cycle: 2},
-            // SEI(SEt Interrupt)
-            0x78: {mode: IMPLICIT, len: 1, cycle: 2},
-            // CLV(CLear oVerflow)
-            0xB8: {mode: IMPLICIT, len: 1, cycle: 2},
-            // CLD(CLear Decimal)
-            0xD8: {mode: IMPLICIT, len: 1, cycle: 2},
-            // SED(SEt Decimal)
-            0xF8: {mode: IMPLICIT, len: 1, cycle: 2},
-            
-            // INC(INCrement memory)
-            0xE6: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0xF6: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0xEE: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0xFE: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // JMP(JuMP)
-            0x4C: {mode: ABSOLUTE, len: 3, cycle: 3},
-            0x6C: {mode: INDIRECT, len: 3, cycle: 5},
-            
-            // JSR(Jump to SubRoutine)
-            0x20: {mode: ABSOLUTE, len: 3, cycle: 6},
-            
-            // LDA(LoaD Accumulator)
-            0xA9: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0xA5: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xB5: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xAD: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xBD: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0xB9: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0xA1: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0xB1: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // LDX(LoaD X register)
-            0xA2: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0xA6: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xB6: {mode: ZERO_PAGE_Y, len: 2, cycle: 4},
-            0xAE: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xBE: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            
-            // LDY(LoaD Y register)
-            0xA0: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0xA4: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xB4: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xAC: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xBC: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            
-            // LSR(Logical Shift Right)
-            0x4A: {mode: ACCUMULATOR, len: 1, cycle: 2},
-            0x46: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x56: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x4E: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x5E: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // NOP(No OPeration)
-            0xEA: {mode: IMPLICIT, len: 1, cycle: 2},
-            
-            // ORA(bitwise OR with Accumulator)
-            0x09: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0x05: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x15: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x0D: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x1D: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x19: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0x01: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x11: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // Register Instructions
-            // TAX(Transfer A to X)
-            0xAA: {mode: IMPLICIT, len: 1, cycle: 2},
-            // TXA(Transfer X to A)
-            0x8A: {mode: IMPLICIT, len: 1, cycle: 2},
-            // DEX(DEcrement X)
-            0xCA: {mode: IMPLICIT, len: 1, cycle: 2},
-            // INX(INcrement X)
-            0xE8: {mode: IMPLICIT, len: 1, cycle: 2},
-            // TAY(Transfer A to Y)
-            0xA8: {mode: IMPLICIT, len: 1, cycle: 2},
-            // TYA(Transfer Y to A)
-            0x98: {mode: IMPLICIT, len: 1, cycle: 2},
-            // DEY(DEcrement Y)
-            0x88: {mode: IMPLICIT, len: 1, cycle: 2},
-            // INY(INcrement Y)
-            0xC8: {mode: IMPLICIT, len: 1, cycle: 2},
-            
-            // ROL(ROtate Left)
-            0x2A: {mode: ACCUMULATOR, len: 1, cycle: 2},
-            0x26: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x36: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x2E: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x3E: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // ROR(ROtate Right)
-            0x6A: {mode: ACCUMULATOR, len: 1, cycle: 2},
-            0x66: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x76: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x6E: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x7E: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // RTI(ReTurn from Interrupt)
-            0x40: {mode: IMPLICIT, len: 1, cycle: 6},
-            
-            // RTS(ReTurn from Subroutine)
-            0x60: {mode: IMPLICIT, len: 1, cycle: 6},
-            
-            // SBC(SuBtract with Carry)
-            0xE9: {mode: IMMEDIATE,   len: 2, cycle: 2},
-            0xE5: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xF5: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xED: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xFD: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0xF9: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            0xE1: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0xF1: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            
-            // STA(STore Accumulator)
-            0x85: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x95: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x8D: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x9D: {mode: ABSOLUTE_X,  len: 3, cycle: 5},
-            0x99: {mode: ABSOLUTE_Y,  len: 3, cycle: 5},
-            0x81: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x91: {mode: INDIRECT_Y,  len: 2, cycle: 6},
-            
-            // Stack Instructions
-            // TXS(Transfer X to Stack ptr)
-            0x9A: {mode: IMPLICIT, len: 1, cycle: 2},
-            // TSX(Transfer Stack ptr to X)
-            0xBA: {mode: IMPLICIT, len: 1, cycle: 2},
-            // PHA(PusH Accumulator)
-            0x48: {mode: IMPLICIT, len: 1, cycle: 3},
-            // PLA(PuLl Accumulator)
-            0x68: {mode: IMPLICIT, len: 1, cycle: 4},
-            // PHP(PusH Processor status)
-            0x08: {mode: IMPLICIT, len: 1, cycle: 3},
-            // PLP(PuLl Processor status)
-            0x28: {mode: IMPLICIT, len: 1, cycle: 4},
-            
-            // STX(STore X register)
-            0x86: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x96: {mode: ZERO_PAGE_Y, len: 2, cycle: 4},
-            0x8E: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            
-            // STY(STore Y register)
-            0x84: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x94: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x8C: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            
-            // ============================================
-            
-            // NOP(No OPeration)
-            0x1A: {mode: IMPLICIT, len: 1, cycle: 2},
-            0x3A: {mode: IMPLICIT, len: 1, cycle: 2},
-            0x5A: {mode: IMPLICIT, len: 1, cycle: 2},
-            0x7A: {mode: IMPLICIT, len: 1, cycle: 2},
-            0xDA: {mode: IMPLICIT, len: 1, cycle: 2},
-            0xFA: {mode: IMPLICIT, len: 1, cycle: 2},
-            
-            // ALR
-            0x4B: {mode: IMMEDIATE, len: 2, cycle: 2},
-            
-            // ANC
-            0x0B: {mode: IMMEDIATE, len: 2, cycle: 2},
-            0x2B: {mode: IMMEDIATE, len: 2, cycle: 2},
-            
-            // ARR
-            0x6B: {mode: IMMEDIATE, len: 2, cycle: 2},
-            
-            // AXS
-            0xCB: {mode: IMMEDIATE, len: 2, cycle: 2},
-            
-            // LAX
-            0xA3: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0xA7: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0xAF: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0xB3: {mode: INDIRECT_Y,  len: 2, cycle: 5},
-            0xB7: {mode: ZERO_PAGE_Y, len: 2, cycle: 4},
-            0xBF: {mode: ABSOLUTE_Y,  len: 3, cycle: 4},
-            
-            // SAX
-            0x83: {mode: INDIRECT_X,  len: 2, cycle: 6},
-            0x87: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x8F: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x97: {mode: ZERO_PAGE_Y, len: 2, cycle: 4},
-            
-            // DCP
-            0xC3: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0xC7: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0xCF: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0xD3: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0xD7: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0xDB: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0xDF: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // ISC
-            0xE3: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0xE7: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0xEF: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0xF3: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0xF7: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0xFB: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0xFF: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // RLA
-            0x23: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0x27: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x2F: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x33: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0x37: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x3B: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0x3F: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // RRA
-            0x63: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0x67: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x6F: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x73: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0x77: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x7B: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0x7F: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // SLO
-            0x03: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0x07: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x0F: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x13: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0x17: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x1B: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0x1F: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // SRE
-            0x43: {mode: INDIRECT_X,  len: 2, cycle: 8},
-            0x47: {mode: ZERO_PAGE,   len: 2, cycle: 5},
-            0x4F: {mode: ABSOLUTE,    len: 3, cycle: 6},
-            0x53: {mode: INDIRECT_Y,  len: 2, cycle: 8},
-            0x57: {mode: ZERO_PAGE_X, len: 2, cycle: 6},
-            0x5B: {mode: ABSOLUTE_Y,  len: 3, cycle: 7},
-            0x5F: {mode: ABSOLUTE_X,  len: 3, cycle: 7},
-            
-            // SKB
-            0x80: {mode: IMMEDIATE, len: 2, cycle: 2},
-            0x82: {mode: IMMEDIATE, len: 2, cycle: 2},
-            0x89: {mode: IMMEDIATE, len: 2, cycle: 2},
-            0xC2: {mode: IMMEDIATE, len: 2, cycle: 2},
-            0xE2: {mode: IMMEDIATE, len: 2, cycle: 2},
-            
-            // IGN
-            0x0C: {mode: ABSOLUTE,    len: 3, cycle: 4},
-            0x1C: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x3C: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x5C: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x7C: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0xDC: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0xFC: {mode: ABSOLUTE_X,  len: 3, cycle: 4},
-            0x04: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x44: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x64: {mode: ZERO_PAGE,   len: 2, cycle: 3},
-            0x14: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x34: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x54: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0x74: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xD4: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-            0xF4: {mode: ZERO_PAGE_X, len: 2, cycle: 4},
-        };
     };
     
-    this.simulate = function(callback) {
-        var opAddr = this.regPC;
-        var op = this.mem[opAddr];
-        var opInf = this.opData[op];
-        
-        // test start================================
-        var inst = [];
-        for(var i = 0; i < opInf.len; i++) {
-            inst.push(this.mem[opAddr + i]);
-        }
-        var result = {
-            addr: opAddr,
-            inst: inst,
-            A: this.regA,
-            X: this.regX,
-            Y: this.regY,
-            P: this.getStatus(),
-            SP: this.regSP & 0xff,
-            CYC: this.cycles
-        };
-        callback(result);
-        // test end================================
-        
-        this.regPC += opInf.len;
-        this.cycles += opInf.cycle;
+    this.step = function() {
+        var opinf = OP_DATA[this.readByte(this.regPC + 1)];
+        var opaddr = this.regPC;
+        this.regPC += opinf.len;
+        this.cycles += opinf.cycle;
+        var name = opinf.name;
+        var mode = opinf.mode;
         var addr = 0;
         var cycleAdd = 0;
-        switch(opInf.mode) {
-            // Zero Page,X
-            case ZERO_PAGE_X:
-                addr = (this.regX + this.mem[opAddr + 1]) & 0xff;
-                break;
-            
-            // Zero Page,Y
-            case ZERO_PAGE_Y:
-                addr = (this.regY + this.mem[opAddr + 1]) & 0xff;
-                break;
-            
-            // Absolute,X
-            case ABSOLUTE_X:
-                addr = this.mem[opAddr + 1] | this.mem[opAddr + 2] << 8;
-                addr += this.regX;
-                if(addr & 0xff00 !== (addr + this.regX) & 0xff00) {
-                    cycleAdd = 1;
-                }
-                break;
-            
-            // Absolute,Y
-            case ABSOLUTE_Y:
-                addr = this.mem[opAddr + 1] | this.mem[opAddr + 2] << 8;
-                addr += this.regY;
-                if(addr & 0xff00 !== (addr + this.regY) & 0xff00) {
-                    cycleAdd = 1;
-                }
-                break;
-            
-            // Indirect,X
-            case INDIRECT_X:
-                var x1 = this.mem[this.mem[opAddr + 1] + this.regX];
-                var x2 = this.mem[this.mem[opAddr + 1] + this.regX + 1];
-                addr = x1 | x2 << 8;
-                if(addr & 0xff00 !== (addr + this.regX) & 0xff00) {
-                    cycleAdd = 1;
-                }
-                break;
-            
-            // Indirect,Y
-            case INDIRECT_Y:
-                var y1 = this.mem[this.mem[opAddr + 1]];
-                var y2 = this.mem[this.mem[opAddr + 1] + 1];
-                addr = (y1 | y2 << 8) + this.regY;
-                if(addr & 0xff00 !== (addr + this.regY) & 0xff00) {
-                    cycleAdd = 1;
-                }
-                break;
-            
-            // Implicit
-            case IMPLICIT:
-                break;
-            
-            // Accumulator
-            case ACCUMULATOR:
-                addr = this.regA;
-                break;
-            
-            // Immediate
-            case IMMEDIATE:
-                addr = opAddr + 1;
-                break;
-            
-            // Zero Page
+        var tmp;
+        var add;
+        switch(mode) {
             case ZERO_PAGE:
-                addr = this.mem[opAddr + 1];
+                addr = this.readByte(opaddr + 2);
                 break;
-            
-            // Absolute
-            case ABSOLUTE:
-                addr = this.mem[opAddr + 1] | this.mem[opAddr + 2] << 8;
-                break;
-            
-            // Relative
             case RELATIVE:
-                addr = opAddr + 1;
+                addr = this.readByte(opaddr + 2);
+                if(addr < 0x80) {
+                    addr += this.regPC;
+                } else {
+                    addr += this.regPC - 256;
+                }
                 break;
-            
-            // Indirect
+            case IMPLIED:
+                // Ignore
+                break;
+            case ABSOLUTE:
+                addr = this.read2Byte(opaddr + 2);
+                break;
+            case ACCUMULATOR:
+                addr = this.regPC;
+                break;
+            case IMMEDIATE:
+                addr = this.regPC;
+                break;
+            case ZERO_PAGE_X:
+                addr = (this.readByte(opaddr + 2) + this.regX) & 0xff;
+                break;
+            case ZERO_PAGE_Y:
+                addr = (this.readByte(opaddr + 2) + this.regY) & 0xff;
+                break;
+            case ABSOLUTE_X:
+                addr = this.read2Byte(opaddr + 2);
+                if((addr & 0xff00) !== ((addr + this.regX) & 0xff00)) {
+                    cycleAdd = 1;
+                }
+                addr += this.regX;
+                break;
+            case ABSOLUTE_Y:
+                addr = this.read2Byte(opaddr + 2);
+                if((addr & 0xff00) !== ((addr + this.regY) & 0xff00)) {
+                    cycleAdd = 1;
+                }
+                addr += this.regY;
+                break;
+            case INDIRECT_X:
+                addr = this.readByte(opaddr + 2);
+                if((addr & 0xff00) !== ((addr + this.regX) & 0xff00)) {
+                    cycleAdd = 1;
+                }
+                addr += this.regX;
+                addr &= 0xff;
+                addr = this.read2Byte(addr);
+                break;
+            case INDIRECT_Y:
+                addr = this.read2Byte(this.readByte(opaddr + 2));
+                if((addr & 0xff00) !== ((addr + this.regY) & 0xff00)) {
+                    cycleAdd = 1;
+                }
+                addr += this.regY;
+                break;
             case INDIRECT:
-                addr = this.mem[opAddr + 1] | this.mem[opAddr + 2] << 8;
-                addr = this.mem[addr] | this.mem[addr + 1] << 8;
+                addr = this.read2Byte(opaddr + 2);
+                if(addr < 0x1fff) {
+                    addr = this.readByte(addr) 
+                        + (this.readByte((addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)) << 8);
+                } else {
+                    addr = this.readByte(addr) 
+                        + (this.readByte((addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)) << 8);
+                }
                 break;
         }
+        addr &= 0xffff;
         
-        var tmp;
-        var tmp2;
-        switch(op) {
-            // ADC(ADd with Carry)
-            // Affects Flags: N V Z C
-            case 0x69:
-            case 0x65:
-            case 0x75:
-            case 0x6D:
-            case 0x7D:
-            case 0x79:
-            case 0x61:
-            case 0x71:
-                tmp = this.regA + this.mem[addr] + this.flagC;
-                if(((this.regA ^ this.mem[addr]) & 0x80) === 0
+        switch(name) {
+            case ADC:
+                tmp = this.regA + this.readByte(addr) + this.flagC;
+                if(((this.regA ^ this.readByte(addr)) & 0x80) === 0
                     && ((this.regA ^ tmp) & 0x80) !== 0) {
                     this.flagV = 1;
                 } else {
@@ -650,472 +530,331 @@ function CPU() {
                 this.cycles += cycleAdd;
                 break;
             
-            // AND(bitwise AND with accumulator)
-            // Affects Flags: N Z
-            case 0x29:
-            case 0x25:
-            case 0x35:
-            case 0x2D:
-            case 0x3D:
-            case 0x39:
-            case 0x21:
-            case 0x31:
-                this.regA &= this.mem[addr];
+            case AND:
+                this.regA = this.regA & this.readByte(addr);
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(opInf.mode !== INDIRECT_Y) {
+                if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
                 }
                 break;
             
-            // ASL(Arithmetic Shift Left)
-            // Affects Flags: N Z C
-            case 0x0A:
-            case 0x06:
-            case 0x16:
-            case 0x0E:
-            case 0x1E:
-                if(opInf.mode === ACCUMULATOR) {
+            case ASL:
+                if(mode === ACCUMULATOR) {
                     this.flagC = (this.regA >> 7) & 1;
                     this.regA = (this.regA << 1) & 0xff;
                     this.flagN = (this.regA >> 7) & 1;
                     this.flagZ = this.regA === 0 ? 1 : 0;
                 } else {
-                    tmp = this.mem[addr];
+                    tmp = this.readByte(addr);
                     this.flagC = (tmp >> 7) & 1;
                     tmp = (tmp << 1) & 0xff;
                     this.flagN = (tmp >> 7) & 1;
-                    this.flagZ = tmp;
-                    this.mem[addr] = tmp;
+                    this.flagZ = tmp === 0 ? 1 : 0;
+                    this.writeByte(addr, tmp);
                 }
                 break;
             
-            // BIT(test BITs)
-            // Affects Flags: N V Z
-            case 0x24:
-            case 0x2C:
-                tmp = this.mem[addr];
+            case BCC:
+                if(this.flagC === 0) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
+                break;
+            
+            case BCS:
+                if(this.flagC === 1) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
+                break;
+            
+            case BEQ:
+                if(this.flagZ === 0) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
+                break;
+            
+            case BIT:
+                tmp = this.readByte(addr);
                 this.flagN = (tmp >> 7) & 1;
                 this.flagV = (tmp >> 6) & 1;
                 tmp &= this.regA;
                 this.flagZ = tmp === 0 ? 1 : 0;
                 break;
             
-            // Branch Instructions
-            // BPL(Branch on PLus)
-            case 0x10:
-                if(this.flagN === 0) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BMI(Branch on MInus)
-            case 0x30:
+            case BMI:
                 if(this.flagN === 1) {
                     this.cycles += 1;
                     this.regPC = addr;
                 }
                 break;
-            // BVC(Branch on oVerflow Clear)
-            case 0x50:
-                if(this.flagV === 0) {
+            
+            case BNE:
+                if(this.flagZ !== 0) {
                     this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
                         this.cycles += 1;
                     }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BVS(Branch on oVerflow Set)
-            case 0x70:
-                if(this.flagV === 1) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BCC(Branch on Carry Clear)
-            case 0x90:
-                if(this.flagC === 0) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BCS(Branch on Carry Set)
-            case 0xB0:
-                if(this.flagC === 1) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BNE (Branch on Not Equal)
-            case 0xD0:
-                if(this.flagZ === 0) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
-                }
-                break;
-            // BEQ(Branch on EQual)
-            case 0xF0:
-                if(this.flagZ === 1) {
-                    this.cycles += 1;
-                    var newAddr = this.regPC + this.mem[addr];
-                    if(opAddr & 0xff00 !== newAddr & 0xff00) {
-                        this.cycles += 1;
-                    }
-                    this.regPC = newAddr;
+                    this.regPC = addr;
                 }
                 break;
             
-            // BRK(BReaK)
-            // Affects Flags: B
-            case 0x00:
+            case BPL:
+                if(this.flagN === 0) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
+                break;
+            
+            case BRK:
                 this.regPC += 2;
                 this.push((this.regPC >> 8) & 0xff);
                 this.push(this.regPC & 0xff);
                 this.flagB = 1;
-                this.push(this.getStatus());
+                this.push(this.getFlags());
                 this.flagI = 1;
-                this.regPC = this.mem[0xfffe] | this.mem[0xffff] << 8;
+                this.regPC = this.read2Byte(0xfffe);
                 this.regPC--;
                 break;
             
-            // CMP(CoMPare accumulator)
-            // Affects Flags: N Z C
-            case 0xC9:
-            case 0xC5:
-            case 0xD5:
-            case 0xCD:
-            case 0xDD:
-            case 0xD9:
-            case 0xC1:
-            case 0xD1:
-                tmp = this.regA - this.mem[addr];
-                this.flagC = tmp >= 0 ? 1 : 0;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                this.cycles += cycleAdd;
+            case BVC:
+                if(this.flagV === 0) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
                 break;
             
-            // CPX(ComPare X register)
-            // Affects Flags: N Z C
-            case 0xE0:
-            case 0xE4:
-            case 0xEC:
-                tmp = this.regX - this.mem[addr];
-                this.flagC = tmp >= 0 ? 1 : 0;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
+            case BVS:
+                if(this.flagV === 1) {
+                    this.cycles += 1;
+                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                        this.cycles += 1;
+                    }
+                    this.regPC = addr;
+                }
                 break;
             
-            // CPY(ComPare Y register)
-            // Affects Flags: N Z C
-            case 0xC0:
-            case 0xC4:
-            case 0xCC:
-                tmp = this.regY - this.mem[addr];
-                this.flagC = tmp >= 0 ? 1 : 0;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                break;
-            
-            // DEC(DECrement memory)
-            // Affects Flags: N Z
-            case 0xC6:
-            case 0xD6:
-            case 0xCE:
-            case 0xDE:
-                tmp = (this.mem[addr] - 1) & 0xff;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = tmp === 0 ? 1 : 0;
-                this.mem[addr] = tmp;
-                break;
-            
-            // EOR(bitwise Exclusive OR)
-            // Affects Flags: N Z
-            case 0x49:
-            case 0x45:
-            case 0x55:
-            case 0x4D:
-            case 0x5D:
-            case 0x59:
-            case 0x41:
-            case 0x51:
-                this.regA = (this.mem[addr] ^ this.regA) & 0xff;
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                this.cycles += cycleAdd;
-                break;
-            
-            // Flag(Processor Status) Instructions
-            // Affect Flags: as noted
-            // CLC(CLear Carry)
-            case 0x18:
+            case CLC:
                 this.flagC = 0;
                 break;
-            // SEC(SEt Carry)
-            case 0x38:
-                this.flagC = 1;
-                break;
-            // CLI(CLear Interrupt)
-            case 0x58:
-                this.flagI = 0;
-                break;
-            // SEI(SEt Interrupt)
-            case 0x78:
-                this.flagI = 1;
-                break;
-            // CLV(CLear oVerflow)
-            case 0xB8:
-                this.flagV = 0;
-                break;
-            // CLD(CLear Decimal)
-            case 0xD8:
+            
+            case CLD:
                 this.flagD = 0;
                 break;
-            // SED(SEt Decimal)
-            case 0xF8:
-                this.flagD = 1;
+            
+            case CLI:
+                this.flagI = 0;
                 break;
             
-            // INC(INCrement memory)
-            // Affects Flags: N Z
-            case 0xE6:
-            case 0xF6:
-            case 0xEE:
-            case 0xFE:
-                tmp = (this.mem[addr] + 1) & 0xff;
+            case CLV:
+                this.flagV = 0;
+                break;
+            
+            case CMP:
+                tmp = this.regA - this.readByte(addr);
+                this.flagC = tmp >= 0 ? 1 : 0;
                 this.flagN = (tmp >> 7) & 1;
-                this.flagZ = tmp === 0 ? 1 : 0;
-                this.mem[addr] = tmp & 0xff;
-                break;
-            
-            // JMP(JuMP)
-            // Affects Flags: none
-            case 0x4C:
-            case 0x6C:
-                this.regPC = addr;
-                break;
-            
-            // JSR(Jump to SubRoutine)
-            // Affects Flags: none
-            case 0x20:
-                this.push((this.regPC >> 8) & 0xff);
-                this.push(this.regPC & 0xff);
-                this.regPC = addr;
-                break;
-            
-            // LDA(LoaD Accumulator)
-            // Affects Flags: N Z
-            case 0xA9:
-            case 0xA5:
-            case 0xB5:
-            case 0xAD:
-            case 0xBD:
-            case 0xB9:
-            case 0xA1:
-            case 0xB1:
-                this.regA = this.mem[addr];
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                break;
-            
-            // LDX(LoaD X register)
-            // Affects Flags: N Z
-            case 0xA2:
-            case 0xA6:
-            case 0xB6:
-            case 0xAE:
-            case 0xBE:
-                this.regX = this.mem[addr];
-                this.flagN = (this.regX >>7) & 1;
-                this.flagZ = this.regX === 0 ? 1 : 0;
-                break;
-            
-            // LDY(LoaD Y register)
-            // Affects Flags: N Z
-            case 0xA0:
-            case 0xA4:
-            case 0xB4:
-            case 0xAC:
-            case 0xBC:
-                this.regY = this.mem[addr];
-                this.flagN = (this.regY >> 7) & 1;
-                this.flagZ = this.regY === 0 ? 1 : 0;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
                 this.cycles += cycleAdd;
                 break;
             
-            // LSR(Logical Shift Right)
-            // Affects Flags: N Z C
-            case 0x4A:
-            case 0x46:
-            case 0x56:
-            case 0x4E:
-            case 0x5E:
-                if(opInf.mode === ACCUMULATOR) {
-                    tmp = this.regA & 0xff;
-                    this.flagC = tmp & 1;
-                    tmp >>= 1;
-                    this.regA = tmp;
-                } else {
-                    tmp = this.mem[addr] & 0xff;
-                    this.flagC = tmp & 1;
-                    tmp >>= 1;
-                    this.mem[addr] = tmp;
-                }
-                this.flagN = 0;
-                this.flagZ = tmp === 0 ? 1 : 0;
+            case CPX:
+                tmp = this.regX - this.readByte(addr);
+                this.flagC = tmp >= 0 ? 1 : 0;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
                 break;
             
-            // NOP(No OPeration)
-            // Affects Flags: none
-            case 0xEA:
-                // Ignore
+            case CPY:
+                tmp = this.regY - this.readByte(addr);
+                this.flagC = tmp >= 0 ? 1 : 0;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
                 break;
             
-            // ORA(bitwise OR with Accumulator)
-            // Affects Flags: N Z
-            case 0x09:
-            case 0x05:
-            case 0x15:
-            case 0x0D:
-            case 0x1D:
-            case 0x19:
-            case 0x01:
-            case 0x11:
-                tmp = (this.mem[addr] | this.regA) & 0xff;
+            case DEC:
+                tmp = (this.readByte(addr) - 1) & 0xff;
                 this.flagN = (tmp >> 7) & 1;
                 this.flagZ = tmp === 0 ? 1 : 0;
-                this.regA = tmp;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
+                this.writeByte(addr, tmp);
                 break;
             
-            // Register Instructions
-            // Affect Flags: N Z
-            // TAX(Transfer A to X)
-            case 0xAA:
-                this.regX = this.regA;
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                break;
-            // TXA(Transfer X to A)
-            case 0x8A:
-                this.regA = this.regX;
-                this.flagN = (this.regX >> 7) & 1;
-                this.flagZ = this.regX === 0 ? 1 : 0;
-                break;
-            // DEX(DEcrement X)
-            case 0xCA:
+            case DEX:
                 this.regX = (this.regX - 1) & 0xff;
-                this.flagN = (this.regX >> 7) & 1;
+                this.flagN = (this.regX >> 7) &  1;
                 this.flagZ = this.regX === 0 ? 1 : 0;
                 break;
-            // INX(INcrement X)
-            case 0xE8:
-                this.regX = (this.regX + 1) & 0xff;
-                this.flagN = (this.regX >> 7) & 1;
-                this.flagZ = this.regX === 0 ? 1 : 0;
-                break;
-            // TAY(Transfer A to Y)
-            case 0xA8:
-                this.regY = this.regA;
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                break;
-            // TYA(Transfer Y to A)
-            case 0x98:
-                this.regA = this.regY;
-                this.flagN = (this.regY >> 7) & 1;
-                this.flagZ = this.regY === 0 ? 1 : 0;
-                break;
-            // DEY(DEcrement Y)
-            case 0x88:
+            
+            case DEY:
                 this.regY = (this.regY - 1) & 0xff;
                 this.flagN = (this.regY >> 7) & 1;
                 this.flagZ = this.regY === 0 ? 1 : 0;
                 break;
-            // INY(INcrement Y)
-            case 0xC8:
+            
+            case EOR:
+                this.regA = (this.readByte(addr) ^ this.regA) & 0xff;
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
+                this.cycles += cycleAdd;
+                break;
+            
+            case INC:
+                tmp = (this.readByte(addr) + 1) & 0xff;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = tmp === 0 ? 1 : 0;
+                this.writeByte(addr, tmp);
+                break;
+            
+            case INX:
+                this.regX = (this.regX + 1) & 0xff;
+                this.flagN = (this.regX >> 7) & 1;
+                this.flagZ = this.regX === 0 ? 1 : 0;
+                break;
+            
+            case INY:
                 this.regY++;
                 this.regY &= 0xff;
                 this.flagN = (this.regY >> 7) & 1;
                 this.flagZ = this.regY === 0 ? 1 : 0;
                 break;
             
-            // ROL(ROtate Left)
-            // Affects Flags: N Z C
-            case 0x2A:
-            case 0x26:
-            case 0x36:
-            case 0x2E:
-            case 0x3E:
-                if(opInf.mode === ACCUMULATOR) {
-                    tmp = this.regA;
-                    tmp2 = this.flagC;
-                    this.flagC = (tmp >> 7) & 1;
-                    tmp = ((tmp << 1) & 0xff) + tmp2;
-                    this.regA = tmp;
-                } else {
-                    tmp = this.mem[addr];
-                    tmp2 = this.flagC;
-                    this.flagC = (tmp >> 7) & 1;
-                    tmp = ((tmp << 1) & 0xff) + tmp2;
-                    this.mem[addr] = tmp;
-                }
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = tmp === 0 ? 1 : 0;
+            case JMP:
+                this.regPC = addr - 1;
                 break;
             
-            // ROR(ROtate Right)
-            // Affects Flags: N Z C
-            case 0x6A:
-            case 0x66:
-            case 0x76:
-            case 0x6E:
-            case 0x7E:
-                if(opInf.mode === ACCUMULATOR) {
-                    tmp2 = this.flagC << 7;
-                    this.flagC = this.regA & 1;
-                    tmp = (this.regA >> 1) + tmp2;
-                    this.regA = tmp;
-                } else {
-                    tmp = this.mem[addr];
-                    tmp2 = this.flagC << 7;
+            case JSR:
+                this.push((this.regPC >> 8) & 0xff);
+                this.push(this.regPC & 0xff);
+                this.regPC = addr - 1;
+                break;
+            
+            case LDA:
+                this.regA = this.readByte(addr);
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
+                this.cycles += cycleAdd;
+                break;
+            
+            case LDX:
+                this.regX = this.readByte(addr);
+                this.flagN = (this.regX >> 7) & 1;
+                this.flagZ = this.regX === 0 ? 1 : 0;
+                this.cycles += cycleAdd;
+                break;
+            
+            case LDY:
+                this.regY = this.readByte(addr);
+                this.flagN = (this.regY >> 7) & 1;
+                this.flagZ = this.regY === 0 ? 1 : 0;
+                this.cycles += cycleAdd;
+                break;
+            
+            case LSR:
+                if(mode === ACCUMULATOR) {
+                    tmp = this.regA & 0xff;
                     this.flagC = tmp & 1;
-                    tmp = (tmp >> 1) + tmp2;
-                    this.mem[addr] = tmp;
+                    tmp >>= 1;
+                    this.regA = tmp;
+                } else {
+                    tmp = this.readByte(addr) & 0xff;
+                    this.flagC = tmp & 1;
+                    tmp >>= 1;
+                    this.writeByte(addr, tmp);
+                }
+                this.flagN = 0;
+                this.flagZ = tmp === 0 ? 1 : 0;
+                break;
+            
+            case NOP:
+                // Ignore
+                break;
+            
+            case ORA:
+                tmp = (this.readByte(addr) | this.regA) & 0xff;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = tmp === 0 ? 1 : 0;
+                this.regA = tmp;
+                if(mode !== INDIRECT_Y) {
+                    this.cycles += cycleAdd;
+                }
+                break;
+            
+            case PHA:
+                this.push(this.regA);
+                break;
+            
+            case PHP:
+                this.flagB = 1;
+                this.push(this.getFlags());
+                this.flagB = 0;
+                break;
+            
+            case PLA:
+                this.regA = this.pop();
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
+                break;
+            
+            case PLP:
+                tmp = this.pop();
+                this.setFlags(tmp);
+                break;
+            
+            case ROL:
+                if(mode === ACCUMULATOR) {
+                    tmp = this.regA;
+                    add = this.flagC;
+                    this.flagC = (tmp >> 7) & 1;
+                    tmp = ((tmp << 1) & 0xff) + add;
+                    this.regA = tmp;
+                } else {
+                    tmp = this.readByte(addr);
+                    add = this.flagC;
+                    this.flagC = (tmp >> 7) & 1;
+                    tmp = ((tmp << 1) & 0xff) + add;
+                    this.writeByte(addr, tmp);
                 }
                 this.flagN = (tmp >> 7) & 1;
                 this.flagZ = tmp === 0 ? 1 : 0;
                 break;
             
-            // RTI(ReTurn from Interrupt)
-            // Affects Flags: all
-            case 0x40:
+            case ROR:
+                if(mode === ACCUMULATOR) {
+                    add = this.flagC << 7;
+                    this.flagC = this.regA & 1;
+                    tmp = (this.regA >> 1) + add;
+                    this.regA = tmp;
+                } else {
+                    tmp = this.readByte(addr);
+                    add = this.flagC << 7;
+                    this.flagC = tmp & 1;
+                    tmp = (tmp >> 1) + add;
+                    this.writeByte(addr, tmp);
+                }
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = tmp === 0 ? 1 : 0;
+                break;
+            
+            case RTI:
                 tmp = this.pop();
-                this.setStatus(tmp);
+                this.setFlags(tmp);
                 this.regPC = this.pop() | this.pop() << 8;
                 if(this.regPC === 0xffff) {
                     return;
@@ -1123,342 +862,128 @@ function CPU() {
                 this.regPC--;
                 break;
             
-            // RTS(ReTurn from Subroutine)
-            // Affects Flags: none
-            case 0x60:
+            case RTS:
                 this.regPC = this.pop() | this.pop() << 8;
                 if(this.regPC === 0xffff) {
                     return;
                 }
                 break;
             
-            // SBC(SuBtract with Carry)
-            // Affects Flags: N V Z C
-            case 0xE9:
-            case 0xE5:
-            case 0xF5:
-            case 0xED:
-            case 0xFD:
-            case 0xF9:
-            case 0xE1:
-            case 0xF1:
-                tmp = this.regA - this.mem[addr] - (1 - this.flagC);
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                if(((this.regA ^ tmp) & 0x80) !== 0
-                    && ((this.regA ^ this.mem[addr]) & 0x80) !== 0) {
-                    this.flagV = 1;
-                } else {
-                    this.flagV = 0;
-                }
-                this.flagC = tmp < 0 ? 0 : 1;
-                this.regA = tmp & 0xff;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
+            case SBC:
+                
                 break;
             
-            // STA(STore Accumulator)
-            // Affects Flags: none
-            case 0x85:
-            case 0x95:
-            case 0x8D:
-            case 0x9D:
-            case 0x99:
-            case 0x81:
-            case 0x91:
-                this.mem[addr] = this.regA;
+            case SEC:
+                this.flagC = 1;
                 break;
             
-            // Stack Instructions
-            // TXS(Transfer X to Stack ptr)
-            case 0x9A:
-                this.regSP = this.regX + 0x0100;
-                this.regSP = 0x0100 | (this.regSP & 0xff);
-                break;
-            // TSX(Transfer Stack ptr to X)
-            case 0xBA:
-                this.regX = this.regSP - 0x0100;
-                this.flagN = (this.regX >> 7) & 1;
-                this.flagZ = this.regX === 0 ? 1 : 0;
-                break;
-            // PHA(PusH Accumulator)
-            case 0x48:
-                this.push(this.regA);
-                break;
-            // PLA(PuLl Accumulator)
-            case 0x68:
-                this.regA = this.pop();
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                break;
-            // PHP(PusH Processor status)
-            case 0x08:
-                this.flagB = 1;
-                this.push(this.getStatus());
-                this.flagB = 0;
-                break;
-            // PLP(PuLl Processor status)
-            case 0x28:
-                var tmp = this.pop();
-                this.setStatus(tmp);
-                this.flagB = 0;
+            case SED:
+                this.flagD = 1;
                 break;
             
-            // STX(STore X register)
-            // Affects Flags: none
-            case 0x86:
-            case 0x96:
-            case 0x8E:
-                this.mem[addr] = this.regX;
+            case SEI:
+                this.flagI = 1;
                 break;
             
-            // STY(STore Y register)
-            // Affects Flags: none
-            case 0x84:
-            case 0x94:
-            case 0x8C:
-                this.mem[addr] = this.regY;
+            case STA:
+                this.writeByte(addr, this.regA);
                 break;
             
-            // =============================
-            
-            // NOP(No OPeration)
-            case 0x1A:
-            case 0x3A:
-            case 0X5A:
-            case 0x7A:
-            case 0xDA:
-            case 0xFA:
+            case STX:
+                this.writeByte(addr, this.regX);
                 break;
             
-            // ALR
-            case 0x4B:
-                tmp = this.regA & this.mem[addr];
-                this.flagC = tmp & 1;
-                this.regA = tmp >> 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                this.flagN = 0;
+            case STY:
+                this.writeByte(addr, this.regY);
                 break;
             
-            // ANC
-            case 0x0B:
-            case 0x2B:
-                this.regA &= this.mem[addr];
-                this.flagZ = this.regA === 0 ? 1 : 0;
+            case TAX:
+                break;
+            case TAY:
+                break;
+            case TSX:
+                break;
+            case TXA:
+                break;
+            case TXS:
+                break;
+            case TYA:
+                break;
+            case ALR:
+                break;
+            
+            case ANC:
+                this.regA &= this.readByte(addr);
                 this.flagC = this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
                 break;
             
-            // ARR
-            case 0x6B:
-                tmp = this.regA & this.mem[addr];
+            case ARR:
+                tmp = this.regA & this.readByte(addr);
                 this.regA = (tmp >> 1) + (this.flagC << 7);
-                this.flagZ = this.regA === 0 ? 1 : 0;
                 this.flagN = this.flagC;
                 this.flagC = (tmp >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
                 this.flagV = ((tmp >> 7) ^ (tmp >> 6)) & 1;
                 break;
             
-            // AXS
-            case 0xCB:
-                tmp = (this.regX & this.regA) - this.mem[addr];
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                if(((this.regX ^ tmp) & 0x80) !== 0
-                    && ((this.regX & this.mem[addr]) & 0x80) !== 0) {
-                    this.flagV = 1;
-                } else {
-                    this.flagV = 0;
-                }
-                this.flagC = tmp < 0 ? 0 : 1;
-                this.regX = tmp & 0xff;
+            case AXS:
                 break;
             
-            // LAX
-            case 0xA3:
-            case 0xA7:
-            case 0xAF:
-            case 0xB3:
-            case 0xB7:
-            case 0xBF:
-                this.regA = this.regX = this.mem[addr];
-                this.flagZ = this.regA === 0 ? 1 : 0;
+            case LAX:
+                this.regA = this.regX = this.readByte(addr);
                 this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
                 this.cycles += cycleAdd;
                 break;
             
-            // SAX
-            case 0x83:
-            case 0x87:
-            case 0x8F:
-            case 0x97:
-                this.mem[addr] = this.regA & this.regX;
+            case SAX:
+                this.writeByte(addr, this.regA & this.regX);
                 break;
             
-            // DCP
-            case 0xC3:
-            case 0xC7:
-            case 0xCF:
-            case 0xD3:
-            case 0xD7:
-            case 0xDB:
-            case 0xDF:
-                tmp = (this.mem[addr] - 1) & 0xff;
-                this.mem[addr] = tmp;
-                tmp = this.regA - tmp;
-                this.flagC = tmp >= 0 ? 1 : 0;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
+            case DCP:
+                break;
+            case ISC:
+                break;
+            case RLA:
                 break;
             
-            // ISC
-            case 0xE3:
-            case 0xE7:
-            case 0xEF:
-            case 0xF3:
-            case 0xF7:
-            case 0xFB:
-            case 0xFF:
-                tmp = (this.mem[addr] + 1) & 0xff;
-                this.mem[addr] = tmp;
-                tmp = this.regA - tmp - (1 - this.flagC);
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                if(((this.regA ^ tmp) & 0x80) !== 0
-                    && ((this.regA ^ this.mem[addr]) & 0x80) !== 0) {
-                    this.flagV = 1;
-                } else {
-                    this.flagV = 0;
-                }
-                this.flagC = tmp < 0 ? 0 : 1;
-                this.regA = tmp & 0xff;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
+            case RRA:
                 break;
             
-            // RLA
-            case 0x23:
-            case 0x27:
-            case 0x2F:
-            case 0x33:
-            case 0x37:
-            case 0x3B:
-            case 0x3F:
-                tmp = this.mem[addr];
-                tmp2 = this.flagC;
-                this.flagC = (tmp >> 7) & 1;
-                tmp = ((tmp << 1) & 0xff) + tmp2;
-                this.mem[addr] = tmp;
-                this.regA &= tmp;
-                this.flagN = (this.regA >> 7) & 1;
-                this.flagZ = this.regA === 0 ? 1 : 0;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
-                break;
-            
-            // RRA
-            case 0x63:
-            case 0x67:
-            case 0x6F:
-            case 0x73:
-            case 0x77:
-            case 0x7B:
-            case 0x7F:
-                tmp = this.mem[addr];
-                tmp2 = this.flagC << 7;
-                this.flagC = tmp & 1;
-                tmp = (tmp >> 1) + tmp2;
-                this.mem[addr] = tmp;
-                tmp = this.regA + this.mem[addr] + this.flagC;
-                if(((this.regA ^ this.mem[addr]) & 0x80) === 0
-                    && ((this.regA ^ tmp) & 0x80) !== 0) {
-                    this.flagV = 1;
-                } else {
-                    this.flagV = 0;
-                }
-                this.flagC = tmp > 0xff ? 1 : 0;
-                this.flagN = (tmp >> 7) & 1;
-                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
-                this.regA = tmp & 0xff;
-                if(opInf.mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
-                break;
-            
-            // SLO
-            case 0x03:
-            case 0x07:
-            case 0x0F:
-            case 0x13:
-            case 0x17:
-            case 0x1B:
-            case 0x1F:
-                tmp = this.mem[addr];
+            case SLO:
+                tmp = this.readByte(addr);
                 this.flagC = (tmp >> 7) & 1;
                 tmp = (tmp << 1) & 0xff;
-                this.mem[addr] = tmp;
+                this.writeByte(addr, tmp);
                 this.regA |= tmp;
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(opInf.mode !== INDIRECT_Y) {
+                if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
                 }
                 break;
             
-            // SRE
-            case 0x43:
-            case 0x47:
-            case 0x4F:
-            case 0x53:
-            case 0x57:
-            case 0x5B:
-            case 0x5F:
-                tmp = this.mem[addr] & 0xff;
+            case SRE:
+                tmp = this.readByte(addr) & 0xff;
                 this.flagC = tmp & 1;
                 tmp >>= 1;
-                this.mem[addr] = tmp;
+                this.writeByte(addr, tmp);
                 this.regA ^= tmp;
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(opInf.mode !== INDIRECT_Y) {
+                if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
                 }
                 break;
             
-            // SKB
-            case 0x80:
-            case 0x82:
-            case 0x89:
-            case 0xC2:
-            case 0xE2:
+            case SKB:
                 // Do nothing
                 break;
             
-            // IGN
-            case 0x0C:
-            case 0x1C:
-            case 0x3C:
-            case 0x5C:
-            case 0x7C:
-            case 0xDC:
-            case 0xFC:
-            case 0x04:
-            case 0x44:
-            case 0x64:
-            case 0x14:
-            case 0x34:
-            case 0x54:
-            case 0x74:
-            case 0xD4:
-            case 0xF4:
-                // Do nothing but load
-                tmp = this.mem[addr];
-                if(opInf.mode !== INDIRECT_Y) {
+            case IGN:
+                this.readByte(addr);
+                if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
                 }
                 break;
@@ -1466,8 +991,7 @@ function CPU() {
     };
     
     this.push = function(value) {
-        console.log(this.regPC.toString(16), value.toString(16));
-        this.mem[this.regSP] = value;
+        this.writeByte(this.regSP, value);
         this.regSP--;
         this.regSP = 0x0100 | (this.regSP & 0xff);
     };
@@ -1475,321 +999,42 @@ function CPU() {
     this.pop = function() {
         this.regSP++;
         this.regSP = 0x0100 | (this.regSP & 0xff);
-        return this.mem[this.regSP];
+        return this.readByte(this.regSP);
     };
     
-    this.setStatus = function(value) {
-        this.flagN = (value >> 7) & 1;
-        this.flagV = (value >> 6) & 1;
-        this.flagB = (value >> 4) & 1;
-        this.flagD = (value >> 3) & 1;
-        this.flagI = (value >> 2) & 1;
-        this.flagZ = (value >> 1) & 1;
-        this.flagC = value & 1;
+    this.readByte = function(addr) {
+        return this.mem[addr];
     };
     
-    this.getStatus = function() {
-        return (this.flagN << 7)
-            | (this.flagV << 6)
-            | (1 << 5)
-            | (this.flagB << 4)
-            | (this.flagD << 3)
-            | (this.flagI << 2)
+    this.read2Byte = function(addr) {
+        var b1 = this.readByte[addr];
+        var b2 = this.readByte[addr + 1];
+        return b1 | b2 << 8;
+    };
+    
+    this.writeByte = function(addr, value) {
+        this.mem[addr] = value;
+    };
+    
+    this.getFlags = function() {
+        return this.flagC
             | (this.flagZ << 1)
-            | this.flagC;
+            | (this.flagI << 2)
+            | (this.flagD << 3)
+            | (this.flagB << 4)
+            | (this.flagU << 5)
+            | (this.flagV << 6)
+            | (this.flagN << 7);
+    };
+    
+    this.setFlags = function(value) {
+        this.flagC = value & 1;
+        this.flagZ = (vlaue >> 1) & 1;
+        this.flagI = (vlaue >> 2) & 1;
+        this.flagD = (vlaue >> 3) & 1;
+        this.flagB = (vlaue >> 4) & 1;
+        this.flagU = (vlaue >> 5) & 1;
+        this.flagV = (vlaue >> 6) & 1;
+        this.flagN = (vlaue >> 7) & 1;
     };
 }
-
-function httpGet(url, responseType, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.responseType = responseType;
-    xhr.onload = function () {
-        if(xhr.status === 200) {
-            if(responseType == 'text') {
-                callback(xhr.responseText);
-            } else {
-                callback(xhr.response);
-            }
-        } else {
-            callback(null);
-        }
-    };
-    xhr.open('get', url, true);
-    xhr.send();
-}
-
-
-// =====================================================
-
-
-httpGet('./test.nes', 'arraybuffer', function(res) {
-    var buf = new Uint8Array(res);
-    var rom = new ROM();
-    rom.load(buf);
-    var cpu = new CPU();
-    cpu.reset();
-    var mapper = new Mappers[rom.mapperType]();
-    mapper.loadROM(rom, cpu.mem);
-    httpGet('./test.log', 'text', function(content) {
-        var lines = content.split(/\r?\n/);
-        for(var i = 0; i < 1000; i++) {
-            var line = lines[i];
-            cpu.simulate(function(result) {
-                checkResult(line, result);
-            });
-        }
-    });
-});
-
-function checkResult(line, result) {
-    var values = /([0-9A-F]{4})\s{2}([\s\S]*?)\s{2}[\s\S]*?A:([0-9A-F]{2})[\s\S]*?X:([0-9A-F]{2})[\s\S]*?Y:([0-9A-F]{2})[\s\S]*?P:([0-9A-F]{2})[\s\S]*?SP:([0-9A-F]{2})[\s\S]*?CYC:([0-9]+)/.exec(line);
-    var addr = parseInt('0x' + values[1]);
-    var strs = values[2].split(' ');
-    var inst = [];
-    for(var i = 0; i < strs.length; i++) {
-        inst.push(parseInt('0x' + strs[i]));
-    }
-    var a = parseInt('0x' + values[3]);
-    var x = parseInt('0x' + values[4]);
-    var y = parseInt('0x' + values[5]);
-    var p = parseInt('0x' + values[6]);
-    var sp = parseInt('0x' + values[7]);
-    var cyc = parseInt(values[8]);
-    var err = {
-        addr: addr !== result.addr,
-        inst: false,
-        A: a !== result.A,
-        X: x !== result.X,
-        Y: y !== result.Y,
-        P: p !== result.P,
-        SP: sp !== result.SP,
-        CYC: cyc !== result.CYC
-    };
-    for(var i = 0; i < inst.length; i++) {
-        if(inst[i] !== result.inst[i]) {
-            err.inst = true;
-            break;
-        }
-    }
-    /*for(var i = 0, keys = Object.keys(err); i < keys.length; i++) {
-        if(err[keys[i]]) {
-            printResult(result, err);
-            break;
-        }
-    }*/
-    printResult(result, err);
-}
-
-function printResult(result, err) {
-    var inst = '';
-    for(var i = 0; i < result.inst.length; i++) {
-        inst +=  result.inst[i].toString(16).toUpperCase();
-        if(i < result.inst.length - 1) {
-            inst += ' ';
-        }
-    }
-    var colors = [];
-    for(var k in err) {
-        colors.push(err[k] ? 'color: red' : 'color: black');
-    }
-    console.log(
-        '%c' + result.addr.toString(16).toUpperCase() + '  '
-        + '%c' + inst + '  '
-        + '%cA:' + result.A.toString(16).toUpperCase() + '  '
-        + '%cX:' + result.X.toString(16).toUpperCase() + '  '
-        + '%cY:' + result.Y.toString(16).toUpperCase() + '  '
-        + '%cP:' + result.P.toString(16).toUpperCase() + '  '
-        + '%cSP:' + result.SP.toString(16).toUpperCase() + '  '
-        + '%cCYC:' + result.CYC,
-        ...colors
-    );
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
