@@ -1179,7 +1179,7 @@ function CPU() {
             // TSX(Transfer Stack ptr to X)
             case 0xBA:
                 this.regX = this.regSP - 0x0100;
-                this.flagN = (this.regSP >> 7) & 1;
+                this.flagN = (this.regX >> 7) & 1;
                 this.flagZ = this.regX === 0 ? 1 : 0;
                 break;
             // PHA(PusH Accumulator)
@@ -1196,11 +1196,13 @@ function CPU() {
             case 0x08:
                 this.flagB = 1;
                 this.push(this.getStatus());
+                this.flagB = 0;
                 break;
             // PLP(PuLl Processor status)
             case 0x28:
                 var tmp = this.pop();
                 this.setStatus(tmp);
+                this.flagB = 0;
                 break;
             
             // STX(STore X register)
@@ -1464,6 +1466,7 @@ function CPU() {
     };
     
     this.push = function(value) {
+        console.log(this.regPC.toString(16), value.toString(16));
         this.mem[this.regSP] = value;
         this.regSP--;
         this.regSP = 0x0100 | (this.regSP & 0xff);
@@ -1528,7 +1531,7 @@ httpGet('./test.nes', 'arraybuffer', function(res) {
     var mapper = new Mappers[rom.mapperType]();
     mapper.loadROM(rom, cpu.mem);
     httpGet('./test.log', 'text', function(content) {
-        var lines = content.split('\r\n');
+        var lines = content.split(/\r?\n/);
         for(var i = 0; i < 1000; i++) {
             var line = lines[i];
             cpu.simulate(function(result) {
