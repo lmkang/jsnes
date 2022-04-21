@@ -546,6 +546,7 @@ function CPU() {
             case ZERO_PAGE:
                 addr = this.readByte(opaddr + 2);
                 break;
+            
             case RELATIVE:
                 addr = this.readByte(opaddr + 2);
                 if(addr < 0x80) {
@@ -554,24 +555,31 @@ function CPU() {
                     addr += this.regPC - 256;
                 }
                 break;
+            
             case IMPLIED:
                 // Ignore
                 break;
+            
             case ABSOLUTE:
                 addr = this.read2Byte(opaddr + 2);
                 break;
+            
             case ACCUMULATOR:
                 addr = this.regPC;
                 break;
+            
             case IMMEDIATE:
                 addr = this.regPC;
                 break;
+            
             case ZERO_PAGE_X:
                 addr = (this.readByte(opaddr + 2) + this.regX) & 0xff;
                 break;
+            
             case ZERO_PAGE_Y:
                 addr = (this.readByte(opaddr + 2) + this.regY) & 0xff;
                 break;
+            
             case ABSOLUTE_X:
                 addr = this.read2Byte(opaddr + 2);
                 if(this.isCrossPage(addr, addr + this.regX)) {
@@ -579,6 +587,7 @@ function CPU() {
                 }
                 addr += this.regX;
                 break;
+            
             case ABSOLUTE_Y:
                 addr = this.read2Byte(opaddr + 2);
                 if(this.isCrossPage(addr, addr + this.regY)) {
@@ -586,30 +595,31 @@ function CPU() {
                 }
                 addr += this.regY;
                 break;
+            
             case INDIRECT_X:
                 tmp = this.readByte(opaddr + 2) + this.regX;
-                var x1 = this.readByte(tmp & 0xff);
-                var x2 = this.readByte((tmp + 1) & 0xff);
-                addr = x1 | x2 << 8;
+                addr = this.readByte(tmp & 0xff) 
+                    | this.readByte((tmp + 1) & 0xff) << 8;
                 break;
+            
             case INDIRECT_Y:
                 tmp = this.readByte(opaddr + 2);
-                var y1 = this.readByte(tmp & 0xff);
-                var y2 = this.readByte((tmp + 1) & 0xff);
-                addr = y1 | y2 << 8;
+                addr = this.readByte(tmp & 0xff) 
+                    | this.readByte((tmp + 1) & 0xff) << 8;
                 if(this.isCrossPage(addr, addr + this.regY)) {
                     cycleAdd = 1;
                 }
                 addr += this.regY
                 break;
+            
             case INDIRECT:
                 addr = this.read2Byte(opaddr + 2);
-                if(addr < 0x1fff) {
+                if((addr & 0xff) === 0xff) {
+                    // Hardware bug
                     addr = this.readByte(addr) 
-                        + (this.readByte((addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)) << 8);
+                        | this.readByte(addr & 0xff00) << 8;
                 } else {
-                    addr = this.readByte(addr) 
-                        + (this.readByte((addr & 0xff00) | (((addr & 0xff) + 1) & 0xff)) << 8);
+                    addr = this.read2Byte(addr);
                 }
                 break;
         }
