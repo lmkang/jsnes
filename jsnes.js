@@ -1,3 +1,76 @@
+function ROM() {
+    this.load = function(buf) {
+        if(buf[0] !== 0x4e
+            || buf[1] !== 0x45
+            || buf[2] !== 0x53
+            || buf[3] !== 0x1a) {
+            throw new Error('Not a valid nes');
+        }
+        
+        // PRG-ROM count(16KB)
+        this.prgCount = buf[4];
+        // CHR-ROM count(4KB)
+        this.chrCount = buf[5];
+        // 0-horizontal, 1-vertical
+        this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
+        this.batteryRAM = buf[6] & 2 > 0 ? 1 : 0;
+        this.trainer = buf[6] & 4 > 0 ? 1 : 0;
+        this.fourScreen = buf[6] & 8 > 0 ? 1 : 0;
+        this.mapperType = (buf[6] >> 4) | (buf[7] & 0xf0);
+        
+        console.log('mirroring: ' + this.mirroring);
+        console.log('batteryRAM: ' + this.batteryRAM);
+        console.log('trainer: ' + this.trainer);
+        console.log('fourScreen: ' + this.fourScreen);
+        console.log('mapperType: ' + this.mapperType);
+        
+        var offset = 16;
+        if(this.trainer) {
+            offset += 512;
+        }
+        // PRG-ROM banks
+        this.prgBanks = [];
+        for(var i = 0; i < this.prgCount; i++) {
+            this.prgBanks[i] = [];
+            for(var j = 0; j < 16384; j++) {
+                this.prgBanks[i][j] = buf[offset + j];
+            }
+            offset += 16384;
+        }
+        // CHR-ROM banks
+        this.chrBanks = [];
+        for(var i = 0; i < this.chrCount; i++) {
+            this.chrBanks[i] = [];
+            for(var j = 0; j < 4096; j++) {
+                this.chrBanks[i][j] = buf[offset + j];
+            }
+            offset += 4096;
+        }
+    };
+}
+
+var Mappers = {};
+Mappers[0] = function() {
+    function copyArray(src, index1, dst, index2, len) {
+        for(var i = 0; i < len; i++) {
+            dst[index2++] = src[index1++];
+        }
+    }
+    
+    this.loadROM = function(rom, mem) {
+        // load PRG-ROM
+        if(rom.prgCount > 1) {
+            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
+            copyArray(rom.prgBanks[1], 0, mem, 0xc000, 16384);
+        } else {
+            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
+            copyArray(rom.prgBanks[0], 0, mem, 0xc000, 16384);
+        }
+        // load CHR-ROM
+        
+    };
+};
+
 function CPU() {
     var ZERO_PAGE = 0;
     var RELATIVE = 1;
@@ -363,6 +436,10 @@ function CPU() {
         0x5B: {name: SRE, mode: ABSOLUTE_Y , len: 3, cycle: 7},
         0x5F: {name: SRE, mode: ABSOLUTE_X , len: 3, cycle: 7},
         
+        // Duplicated instructions
+        0x69: {name: ADC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        0xEB: {name: SBC, mode: IMMEDIATE  , len: 2, cycle: 2},
+        
         // NOPs
         0x1A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
         0x3A: {name: NOP, mode: IMMEDIATE  , len: 1, cycle: 2},
@@ -414,13 +491,13 @@ function CPU() {
         this.regA = 0;
         this.regX = 0;
         this.regY = 0;
-        this.regSP = 0x01ff;
+        this.regSP = 0x01fd;
         this.regPC = 0xC000 - 1;
         
         // flags
         this.flagC = 0;
         this.flagZ = 0;
-        this.flagI = 0;
+        this.flagI = 1;
         this.flagD = 0;
         this.flagB = 0;
         this.flagU = 1;
@@ -430,9 +507,32 @@ function CPU() {
         this.cycles = 7;
     };
     
-    this.step = function() {
+    this.step = function(callback) {
         var opinf = OP_DATA[this.readByte(this.regPC + 1)];
+        if(!opinf) {
+            console.log('unknowd op: ' + this.readByte(this.regPC + 1).toString(16));
+            return;
+        }
         var opaddr = this.regPC;
+        
+        // =============test start===============
+        var inst = [];
+        for(var i = 0; i < opinf.len; i++) {
+            inst.push(this.mem[opaddr + 1 + i]);
+        }
+        var result = {
+            addr: opaddr + 1,
+            inst: inst,
+            A: this.regA,
+            X: this.regX,
+            Y: this.regY,
+            P: this.getFlags(),
+            SP: this.regSP & 0xff,
+            CYC: this.cycles
+        };
+        callback(result);
+        // =============test end===============
+        
         this.regPC += opinf.len;
         this.cycles += opinf.cycle;
         var name = opinf.name;
@@ -441,6 +541,7 @@ function CPU() {
         var cycleAdd = 0;
         var tmp;
         var add;
+        
         switch(mode) {
             case ZERO_PAGE:
                 addr = this.readByte(opaddr + 2);
@@ -473,33 +574,33 @@ function CPU() {
                 break;
             case ABSOLUTE_X:
                 addr = this.read2Byte(opaddr + 2);
-                if((addr & 0xff00) !== ((addr + this.regX) & 0xff00)) {
+                if(this.isCrossPage(addr, addr + this.regX)) {
                     cycleAdd = 1;
                 }
                 addr += this.regX;
                 break;
             case ABSOLUTE_Y:
                 addr = this.read2Byte(opaddr + 2);
-                if((addr & 0xff00) !== ((addr + this.regY) & 0xff00)) {
+                if(this.isCrossPage(addr, addr + this.regY)) {
                     cycleAdd = 1;
                 }
                 addr += this.regY;
                 break;
             case INDIRECT_X:
-                addr = this.readByte(opaddr + 2);
-                if((addr & 0xff00) !== ((addr + this.regX) & 0xff00)) {
-                    cycleAdd = 1;
-                }
-                addr += this.regX;
-                addr &= 0xff;
-                addr = this.read2Byte(addr);
+                tmp = this.readByte(opaddr + 2) + this.regX;
+                var x1 = this.readByte(tmp & 0xff);
+                var x2 = this.readByte((tmp + 1) & 0xff);
+                addr = x1 | x2 << 8;
                 break;
             case INDIRECT_Y:
-                addr = this.read2Byte(this.readByte(opaddr + 2));
-                if((addr & 0xff00) !== ((addr + this.regY) & 0xff00)) {
+                tmp = this.readByte(opaddr + 2);
+                var y1 = this.readByte(tmp & 0xff);
+                var y2 = this.readByte((tmp + 1) & 0xff);
+                addr = y1 | y2 << 8;
+                if(this.isCrossPage(addr, addr + this.regY)) {
                     cycleAdd = 1;
                 }
-                addr += this.regY;
+                addr += this.regY
                 break;
             case INDIRECT:
                 addr = this.read2Byte(opaddr + 2);
@@ -534,9 +635,9 @@ function CPU() {
                 this.regA = this.regA & this.readByte(addr);
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(mode !== INDIRECT_Y) {
+                //if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
-                }
+                //}
                 break;
             
             case ASL:
@@ -558,7 +659,7 @@ function CPU() {
             case BCC:
                 if(this.flagC === 0) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -568,7 +669,7 @@ function CPU() {
             case BCS:
                 if(this.flagC === 1) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -576,9 +677,9 @@ function CPU() {
                 break;
             
             case BEQ:
-                if(this.flagZ === 0) {
+                if(this.flagZ === 1) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -601,9 +702,9 @@ function CPU() {
                 break;
             
             case BNE:
-                if(this.flagZ !== 0) {
+                if(this.flagZ === 0) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -613,7 +714,7 @@ function CPU() {
             case BPL:
                 if(this.flagN === 0) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -634,7 +735,7 @@ function CPU() {
             case BVC:
                 if(this.flagV === 0) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -644,7 +745,7 @@ function CPU() {
             case BVS:
                 if(this.flagV === 1) {
                     this.cycles += 1;
-                    if((opaddr & 0xff00) !== (addr & 0xff00)) {
+                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -791,9 +892,9 @@ function CPU() {
                 this.flagN = (tmp >> 7) & 1;
                 this.flagZ = tmp === 0 ? 1 : 0;
                 this.regA = tmp;
-                if(mode !== INDIRECT_Y) {
+                //if(mode !== INDIRECT_Y) {
                     this.cycles += cycleAdd;
-                }
+                //}
                 break;
             
             case PHA:
@@ -815,6 +916,7 @@ function CPU() {
             case PLP:
                 tmp = this.pop();
                 this.setFlags(tmp);
+                this.flagB = 0;
                 break;
             
             case ROL:
@@ -870,7 +972,20 @@ function CPU() {
                 break;
             
             case SBC:
-                
+                tmp = this.regA - this.readByte(addr) - (1 - this.flagC);
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
+                if(((this.regA ^ tmp) & 0x80) !== 0
+                    && ((this.regA ^ this.readByte(addr)) & 0x80) !== 0) {
+                    this.flagV = 1;
+                } else {
+                    this.flagV = 0;
+                }
+                this.flagC = tmp >= 0 ? 1 : 0;
+                this.regA = tmp & 0xff;
+                //if(mode !== INDIRECT_Y) {
+                    this.cycles += cycleAdd;
+                //}
                 break;
             
             case SEC:
@@ -898,18 +1013,46 @@ function CPU() {
                 break;
             
             case TAX:
+                this.regX = this.regA;
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;;
                 break;
+            
             case TAY:
+                this.regY = this.regA;
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
                 break;
+            
             case TSX:
+                this.regX = this.regSP - 0x0100;
+                this.flagN = (this.regSP >> 7) & 1;
+                this.flagZ = this.regX === 0 ? 1 : 0;
                 break;
+            
             case TXA:
+                this.regA = this.regX;
+                this.flagN = (this.regX >> 7) & 1;
+                this.flagZ = this.regX === 0 ? 1 : 0;
                 break;
+            
             case TXS:
+                this.regSP = this.regX + 0x0100;
+                this.regSP = 0x0100 | (this.regSP & 0xff);
                 break;
+            
             case TYA:
+                this.regA = this.regY;
+                this.flagN = (this.regY >> 7) & 1;
+                this.flagZ = this.regY === 0 ? 1 : 0;
                 break;
+            
             case ALR:
+                tmp = this.regA & this.readByte(addr);
+                this.regA = tmp >> 1;
+                this.flagC = tmp & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
+                this.flagN = 0;
                 break;
             
             case ANC:
@@ -928,6 +1071,17 @@ function CPU() {
                 break;
             
             case AXS:
+                tmp = (this.regX & this.regA) - this.readByte(addr);
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
+                if(((this.regX ^ tmp) & 0x80) !== 0
+                    && ((this.regX ^ this.readByte(addr)) & 0x80) !== 0) {
+                    this.flagV = 1;
+                } else {
+                    this.flagV = 0;
+                }
+                this.regX = tmp & 0xff;
+                this.flagC = tmp >= 0 ? 1 : 0;
                 break;
             
             case LAX:
@@ -942,13 +1096,58 @@ function CPU() {
                 break;
             
             case DCP:
+                tmp = (this.readByte(addr) - 1) & 0xff;
+                this.writeByte(addr, tmp);
+                tmp = this.regA - tmp;
+                this.flagC = tmp >= 0 ? 1 : 0;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
                 break;
+            
             case ISC:
+                tmp = (this.readByte(addr) + 1) & 0xff;
+                this.writeByte(addr, tmp);
+                tmp = this.regA - tmp - (1 - this.flagC);
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
+                if(((this.regA ^ tmp) & 0x80) !== 0
+                    && ((this.regA ^ this.readByte(addr)) & 0x80) !== 0) {
+                    this.flagV = 1;
+                } else {
+                    this.flagV = 0;
+                }
+                this.flagC = tmp >= 0 ? 1 : 0;
+                this.regA = tmp & 0xff;
                 break;
+            
             case RLA:
+                tmp = this.readByte(addr);
+                add = this.flagC;
+                this.flagC = (tmp >> 7) & 1;
+                tmp = ((tmp << 1) & 0xff) + add;
+                this.writeByte(addr, tmp);
+                this.regA &= tmp;
+                this.flagN = (this.regA >> 7) & 1;
+                this.flagZ = this.regA === 0 ? 1 : 0;
                 break;
             
             case RRA:
+                tmp = this.readByte(addr);
+                add = this.flagC << 7;
+                this.flagC = tmp & 1;
+                tmp = (tmp >> 1) + add;
+                this.writeByte(addr, tmp);
+                tmp = this.regA + this.readByte(addr) + this.flagC;
+                if(((this.regA ^ this.readByte(addr)) & 0x80) === 0
+                    && ((this.regA ^ tmp) & 0x80) !== 0) {
+                    this.flagV = 1;
+                } else {
+                    this.flagV = 0;
+                }
+                this.flagC = tmp > 0xff ? 1 : 0;
+                this.flagN = (tmp >> 7) & 1;
+                this.flagZ = (tmp & 0xff) === 0 ? 1 : 0;
+                this.regA = tmp & 0xff;
                 break;
             
             case SLO:
@@ -959,9 +1158,6 @@ function CPU() {
                 this.regA |= tmp;
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
                 break;
             
             case SRE:
@@ -972,9 +1168,6 @@ function CPU() {
                 this.regA ^= tmp;
                 this.flagN = (this.regA >> 7) & 1;
                 this.flagZ = this.regA === 0 ? 1 : 0;
-                if(mode !== INDIRECT_Y) {
-                    this.cycles += cycleAdd;
-                }
                 break;
             
             case SKB:
@@ -988,6 +1181,10 @@ function CPU() {
                 }
                 break;
         }
+    };
+    
+    this.isCrossPage = function(addr1, addr2) {
+        return (addr1 & 0xff00) !== (addr2 & 0xff00);
     };
     
     this.push = function(value) {
@@ -1007,8 +1204,8 @@ function CPU() {
     };
     
     this.read2Byte = function(addr) {
-        var b1 = this.readByte[addr];
-        var b2 = this.readByte[addr + 1];
+        var b1 = this.readByte(addr);
+        var b2 = this.readByte(addr + 1);
         return b1 | b2 << 8;
     };
     
@@ -1029,12 +1226,297 @@ function CPU() {
     
     this.setFlags = function(value) {
         this.flagC = value & 1;
-        this.flagZ = (vlaue >> 1) & 1;
-        this.flagI = (vlaue >> 2) & 1;
-        this.flagD = (vlaue >> 3) & 1;
-        this.flagB = (vlaue >> 4) & 1;
-        this.flagU = (vlaue >> 5) & 1;
-        this.flagV = (vlaue >> 6) & 1;
-        this.flagN = (vlaue >> 7) & 1;
+        this.flagZ = (value >> 1) & 1;
+        this.flagI = (value >> 2) & 1;
+        this.flagD = (value >> 3) & 1;
+        this.flagB = (value >> 4) & 1;
+        this.flagU = 1;
+        this.flagV = (value >> 6) & 1;
+        this.flagN = (value >> 7) & 1;
     };
 }
+
+function httpGet(url, responseType, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.responseType = responseType;
+    xhr.onload = function () {
+        if(xhr.status === 200) {
+            if(responseType == 'text') {
+                callback(xhr.responseText);
+            } else {
+                callback(xhr.response);
+            }
+        } else {
+            callback(null);
+        }
+    };
+    xhr.open('get', url, true);
+    xhr.send();
+}
+
+
+// =====================================================
+
+
+httpGet('./test.nes', 'arraybuffer', function(res) {
+    var buf = new Uint8Array(res);
+    var rom = new ROM();
+    rom.load(buf);
+    var cpu = new CPU();
+    cpu.reset();
+    var mapper = new Mappers[rom.mapperType]();
+    mapper.loadROM(rom, cpu.mem);
+    httpGet('./test.log', 'text', function(content) {
+        var lines = content.split(/\r?\n/);
+        for(var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            cpu.step(function(result) {
+                checkResult(line, result);
+            });
+        }
+    });
+});
+
+function checkResult(line, result) {
+    var values = /([0-9A-F]{4})\s{2}([\s\S]*?)\s{2}[\s\S]*?A:([0-9A-F]{2})[\s\S]*?X:([0-9A-F]{2})[\s\S]*?Y:([0-9A-F]{2})[\s\S]*?P:([0-9A-F]{2})[\s\S]*?SP:([0-9A-F]{2})[\s\S]*?CYC:([0-9]+)/.exec(line);
+    var addr = parseInt('0x' + values[1]);
+    var strs = values[2].split(' ');
+    var inst = [];
+    for(var i = 0; i < result.inst.length; i++) {
+        inst.push(parseInt('0x' + strs[i]));
+    }
+    var a = parseInt('0x' + values[3]);
+    var x = parseInt('0x' + values[4]);
+    var y = parseInt('0x' + values[5]);
+    var p = parseInt('0x' + values[6]);
+    var sp = parseInt('0x' + values[7]);
+    var cyc = parseInt(values[8]);
+    var err = {
+        addr: addr !== result.addr,
+        inst: false,
+        A: a !== result.A,
+        X: x !== result.X,
+        Y: y !== result.Y,
+        P: p !== result.P,
+        SP: sp !== result.SP,
+        CYC: cyc !== result.CYC
+    };
+    for(var i = 0; i < inst.length; i++) {
+        if(inst[i] !== result.inst[i]) {
+            err.inst = true;
+            break;
+        }
+    }
+    for(var i = 0, keys = Object.keys(err); i < keys.length; i++) {
+        if(err[keys[i]]) {
+            printResult(result, err);
+            break;
+        }
+    }
+    //printResult(result, err);
+}
+
+function printResult(result, err) {
+    var inst = '';
+    for(var i = 0; i < result.inst.length; i++) {
+        inst +=  result.inst[i].toString(16).toUpperCase();
+        if(i < result.inst.length - 1) {
+            inst += ' ';
+        }
+    }
+    var colors = [];
+    for(var k in err) {
+        colors.push(err[k] ? 'color: red' : 'color: black');
+    }
+    console.log(
+        '%c' + result.addr.toString(16).toUpperCase() + '  '
+        + '%c' + inst + '  '
+        + '%cA:' + result.A.toString(16).toUpperCase() + '  '
+        + '%cX:' + result.X.toString(16).toUpperCase() + '  '
+        + '%cY:' + result.Y.toString(16).toUpperCase() + '  '
+        + '%cP:' + result.P.toString(16).toUpperCase() + '  '
+        + '%cSP:' + result.SP.toString(16).toUpperCase() + '  '
+        + '%cCYC:' + result.CYC,
+        ...colors
+    );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
