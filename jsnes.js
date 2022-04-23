@@ -1287,9 +1287,9 @@ httpGet('./test.nes', 'arraybuffer', function(res) {
 });
 
 function checkResult(line, result) {
-    var values = /([0-9A-F]{4})\s{2}([\s\S]*?)\s{2}[\s\S]*?A:([0-9A-F]{2})[\s\S]*?X:([0-9A-F]{2})[\s\S]*?Y:([0-9A-F]{2})[\s\S]*?P:([0-9A-F]{2})[\s\S]*?SP:([0-9A-F]{2})[\s\S]*?CYC:([0-9]+)/.exec(line);
+    var values = /([0-9A-F]{4})([\S\s]+?)A:([0-9A-F]+)\s+X:([0-9A-F]+)\s+Y:([0-9A-F]+)\s+P:([0-9A-F]+)\s+SP:([0-9A-F]+)\s+PPU:\s*([0-9,\s]+)\s+CYC:([0-9]+)/.exec(line);
     var addr = parseInt('0x' + values[1]);
-    var strs = values[2].split(' ');
+    var strs = values[2].trim().split(' ');
     var inst = [];
     for(var i = 0; i < result.inst.length; i++) {
         inst.push(parseInt('0x' + strs[i]));
@@ -1299,7 +1299,8 @@ function checkResult(line, result) {
     var y = parseInt('0x' + values[5]);
     var p = parseInt('0x' + values[6]);
     var sp = parseInt('0x' + values[7]);
-    var cyc = parseInt(values[8]);
+    //var ppu = values[8].replace(/\s/g, '');
+    var cyc = parseInt(values[9]);
     var err = {
         addr: addr !== result.addr,
         inst: false,
@@ -1308,6 +1309,7 @@ function checkResult(line, result) {
         Y: y !== result.Y,
         P: p !== result.P,
         SP: sp !== result.SP,
+        //PPU: ppu !== result.ppu,
         CYC: cyc !== result.CYC
     };
     for(var i = 0; i < inst.length; i++) {
