@@ -492,7 +492,7 @@ function CPU() {
         this.regX = 0;
         this.regY = 0;
         this.regSP = 0x01fd;
-        this.regPC = 0xC000 - 1;
+        this.regPC = 0xC000;
         
         // flags
         this.flagC = 0;
@@ -508,9 +508,9 @@ function CPU() {
     };
     
     this.step = function(callback) {
-        var opinf = OP_DATA[this.readByte(this.regPC + 1)];
+        var opinf = OP_DATA[this.readByte(this.regPC)];
         if(!opinf) {
-            console.log('unknowd op: ' + this.readByte(this.regPC + 1).toString(16));
+            console.log('unknowd op: ' + this.readByte(this.regPC).toString(16));
             return;
         }
         var opaddr = this.regPC;
@@ -518,10 +518,10 @@ function CPU() {
         // =============test start===============
         var inst = [];
         for(var i = 0; i < opinf.len; i++) {
-            inst.push(this.mem[opaddr + 1 + i]);
+            inst.push(this.mem[opaddr + i]);
         }
         var result = {
-            addr: opaddr + 1,
+            addr: opaddr,
             inst: inst,
             A: this.regA,
             X: this.regX,
@@ -544,11 +544,11 @@ function CPU() {
         
         switch(mode) {
             case ZERO_PAGE:
-                addr = this.readByte(opaddr + 2);
+                addr = this.readByte(opaddr + 1);
                 break;
             
             case RELATIVE:
-                addr = this.readByte(opaddr + 2);
+                addr = this.readByte(opaddr + 1);
                 if(addr & 0x80) {
                     addr -= 0x100;
                 }
@@ -560,27 +560,27 @@ function CPU() {
                 break;
             
             case ABSOLUTE:
-                addr = this.read2Byte(opaddr + 2);
+                addr = this.read2Byte(opaddr + 1);
                 break;
             
             case ACCUMULATOR:
-                addr = this.regPC;
+                addr = opaddr + 1;
                 break;
             
             case IMMEDIATE:
-                addr = this.regPC;
+                addr = opaddr + 1;
                 break;
             
             case ZERO_PAGE_X:
-                addr = (this.readByte(opaddr + 2) + this.regX) & 0xff;
+                addr = (this.readByte(opaddr + 1) + this.regX) & 0xff;
                 break;
             
             case ZERO_PAGE_Y:
-                addr = (this.readByte(opaddr + 2) + this.regY) & 0xff;
+                addr = (this.readByte(opaddr + 1) + this.regY) & 0xff;
                 break;
             
             case ABSOLUTE_X:
-                tmp = this.read2Byte(opaddr + 2);
+                tmp = this.read2Byte(opaddr + 1);
                 addr = tmp + this.regX;
                 if(this.isCrossPage(tmp, addr)) {
                     cycleAdd = 1;
@@ -588,7 +588,7 @@ function CPU() {
                 break;
             
             case ABSOLUTE_Y:
-                tmp = this.read2Byte(opaddr + 2);
+                tmp = this.read2Byte(opaddr + 1);
                 addr = tmp + this.regY;
                 if(this.isCrossPage(tmp, addr)) {
                     cycleAdd = 1;
@@ -596,13 +596,13 @@ function CPU() {
                 break;
             
             case INDIRECT_X:
-                tmp = this.readByte(opaddr + 2) + this.regX;
+                tmp = this.readByte(opaddr + 1) + this.regX;
                 addr = this.readByte(tmp & 0xff) 
                     | this.readByte((tmp + 1) & 0xff) << 8;
                 break;
             
             case INDIRECT_Y:
-                tmp = this.readByte(opaddr + 2);
+                tmp = this.readByte(opaddr + 1);
                 tmp = this.readByte(tmp & 0xff) 
                     | this.readByte((tmp + 1) & 0xff) << 8;
                 addr = tmp + this.regY;
@@ -612,7 +612,7 @@ function CPU() {
                 break;
             
             case INDIRECT:
-                addr = this.read2Byte(opaddr + 2);
+                addr = this.read2Byte(opaddr + 1);
                 if((addr & 0xff) === 0xff) {
                     // Hardware bug
                     addr = this.readByte(addr) 
@@ -668,7 +668,7 @@ function CPU() {
             case BCC:
                 if(this.flagC === 0) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -678,7 +678,7 @@ function CPU() {
             case BCS:
                 if(this.flagC === 1) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -688,7 +688,7 @@ function CPU() {
             case BEQ:
                 if(this.flagZ === 1) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -713,7 +713,7 @@ function CPU() {
             case BNE:
                 if(this.flagZ === 0) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -723,7 +723,7 @@ function CPU() {
             case BPL:
                 if(this.flagN === 0) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -744,7 +744,7 @@ function CPU() {
             case BVC:
                 if(this.flagV === 0) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -754,7 +754,7 @@ function CPU() {
             case BVS:
                 if(this.flagV === 1) {
                     this.cycles += 1;
-                    if(this.isCrossPage(this.regPC + 1, addr + 1)) {
+                    if(this.isCrossPage(this.regPC, addr)) {
                         this.cycles += 1;
                     }
                     this.regPC = addr;
@@ -846,13 +846,14 @@ function CPU() {
                 break;
             
             case JMP:
-                this.regPC = addr - 1;
+                this.regPC = addr;
                 break;
             
             case JSR:
-                this.push((this.regPC >> 8) & 0xff);
-                this.push(this.regPC & 0xff);
-                this.regPC = addr - 1;
+                tmp = this.regPC - 1;
+                this.push((tmp >> 8) & 0xff);
+                this.push(tmp & 0xff);
+                this.regPC = addr;
                 break;
             
             case LDA:
@@ -970,11 +971,10 @@ function CPU() {
                 if(this.regPC === 0xffff) {
                     return;
                 }
-                this.regPC--;
                 break;
             
             case RTS:
-                this.regPC = this.pop() | this.pop() << 8;
+                this.regPC = (this.pop() | this.pop() << 8) + 1;
                 if(this.regPC === 0xffff) {
                     return;
                 }
