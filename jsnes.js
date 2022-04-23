@@ -1245,6 +1245,10 @@ function CPU() {
     };
 }
 
+
+// =====================================================
+
+
 function httpGet(url, responseType, callback) {
     var xhr = new XMLHttpRequest();
     xhr.responseType = responseType;
@@ -1262,29 +1266,6 @@ function httpGet(url, responseType, callback) {
     xhr.open('get', url, true);
     xhr.send();
 }
-
-
-// =====================================================
-
-
-httpGet('./test.nes', 'arraybuffer', function(res) {
-    var buf = new Uint8Array(res);
-    var rom = new ROM();
-    rom.load(buf);
-    var cpu = new CPU();
-    cpu.reset();
-    var mapper = new Mappers[rom.mapperType]();
-    mapper.loadROM(rom, cpu.mem);
-    httpGet('./test.log', 'text', function(content) {
-        var lines = content.split(/\r?\n/);
-        for(var i = 0; i < lines.length; i++) {
-            var line = lines[i];
-            cpu.step(function(result) {
-                checkResult(line, result);
-            });
-        }
-    });
-});
 
 function checkResult(line, result) {
     var values = /([0-9A-F]{4})([\S\s]+?)A:([0-9A-F]+)\s+X:([0-9A-F]+)\s+Y:([0-9A-F]+)\s+P:([0-9A-F]+)\s+SP:([0-9A-F]+)\s+PPU:\s*([0-9,\s]+)\s+CYC:([0-9]+)/.exec(line);
@@ -1352,7 +1333,24 @@ function printResult(result, err) {
     );
 }
 
-
+httpGet('./test.nes', 'arraybuffer', function(res) {
+    var buf = new Uint8Array(res);
+    var rom = new ROM();
+    rom.load(buf);
+    var cpu = new CPU();
+    cpu.reset();
+    var mapper = new Mappers[rom.mapperType]();
+    mapper.loadROM(rom, cpu.mem);
+    httpGet('./test.log', 'text', function(content) {
+        var lines = content.split(/\r?\n/);
+        for(var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            cpu.step(function(result) {
+                checkResult(line, result);
+            });
+        }
+    });
+});
 
 
 
