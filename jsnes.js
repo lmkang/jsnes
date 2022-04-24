@@ -1,3 +1,11 @@
+var Utils = {
+    copyArray: function(src, index1, dst, index2, len) {
+        for(var i = 0; i < len; i++) {
+            dst[index2++] = src[index1++];
+        }
+    }
+};
+
 function ROM() {
     this.load = function(buf) {
         if(buf[0] !== 0x4e
@@ -51,20 +59,14 @@ function ROM() {
 
 var Mappers = {};
 Mappers[0] = function() {
-    function copyArray(src, index1, dst, index2, len) {
-        for(var i = 0; i < len; i++) {
-            dst[index2++] = src[index1++];
-        }
-    }
-    
     this.loadROM = function(rom, mem) {
         // load PRG-ROM
         if(rom.prgCount > 1) {
-            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            copyArray(rom.prgBanks[1], 0, mem, 0xc000, 16384);
+            Utils.copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
+            Utils.copyArray(rom.prgBanks[1], 0, mem, 0xc000, 16384);
         } else {
-            copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            copyArray(rom.prgBanks[0], 0, mem, 0xc000, 16384);
+            Utils.copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
+            Utils.copyArray(rom.prgBanks[0], 0, mem, 0xc000, 16384);
         }
         // load CHR-ROM
         
