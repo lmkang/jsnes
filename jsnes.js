@@ -73,6 +73,51 @@ Mappers[0] = function() {
     };
 };
 
+Mappers[0].prototype.load = function() {
+    
+};
+
+function Cartridge() {
+    
+}
+
+Cartridge.prototype.load(buf, cpu, ppu) {
+    if(buf[0] !== 0x4e
+        || buf[1] !== 0x45
+        || buf[2] !== 0x53
+        || buf[3] !== 0x1a) {
+        throw new Error('Not a valid nes');
+    }
+    
+    // PRG-ROM count(16KB)
+    this.prgCount = buf[4];
+    // CHR-ROM count(4KB)
+    this.chrCount = buf[5];
+    // 0-horizontal, 1-vertical
+    this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
+    this.batteryRAM = buf[6] & 2 > 0 ? 1 : 0;
+    this.trainer = buf[6] & 4 > 0 ? 1 : 0;
+    this.fourScreen = buf[6] & 8 > 0 ? 1 : 0;
+    this.mapperType = (buf[6] >> 4) | (buf[7] & 0xf0);
+    
+    console.log('mirroring: ' + this.mirroring);
+    console.log('batteryRAM: ' + this.batteryRAM);
+    console.log('trainer: ' + this.trainer);
+    console.log('fourScreen: ' + this.fourScreen);
+    console.log('mapperType: ' + this.mapperType);
+    
+    this.mapper = new Mappers[this.mapperType]();
+    this.mapper.load({
+        buf: buf,
+        prgCount: this.prgCount,
+        chrCount: this.chrCount,
+        cpu: cpu,
+        ppu: ppu
+    });
+};
+
+
+
 function CPU() {
     var ZERO_PAGE = 0;
     var RELATIVE = 1;
