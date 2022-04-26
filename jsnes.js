@@ -1,87 +1,30 @@
-var Utils = {
-    copyArray: function(src, index1, dst, index2, len) {
-        for(var i = 0; i < len; i++) {
-            dst[index2++] = src[index1++];
-        }
-    }
-};
-
-function ROM() {
-    this.load = function(buf) {
-        if(buf[0] !== 0x4e
-            || buf[1] !== 0x45
-            || buf[2] !== 0x53
-            || buf[3] !== 0x1a) {
-            throw new Error('Not a valid nes');
-        }
-        
-        // PRG-ROM count(16KB)
-        this.prgCount = buf[4];
-        // CHR-ROM count(4KB)
-        this.chrCount = buf[5];
-        // 0-horizontal, 1-vertical
-        this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
-        this.batteryRAM = buf[6] & 2 > 0 ? 1 : 0;
-        this.trainer = buf[6] & 4 > 0 ? 1 : 0;
-        this.fourScreen = buf[6] & 8 > 0 ? 1 : 0;
-        this.mapperType = (buf[6] >> 4) | (buf[7] & 0xf0);
-        
-        console.log('mirroring: ' + this.mirroring);
-        console.log('batteryRAM: ' + this.batteryRAM);
-        console.log('trainer: ' + this.trainer);
-        console.log('fourScreen: ' + this.fourScreen);
-        console.log('mapperType: ' + this.mapperType);
-        
-        var offset = 16;
-        if(this.trainer) {
-            offset += 512;
-        }
-        // PRG-ROM banks
-        this.prgBanks = [];
-        for(var i = 0; i < this.prgCount; i++) {
-            this.prgBanks[i] = [];
-            for(var j = 0; j < 16384; j++) {
-                this.prgBanks[i][j] = buf[offset + j];
-            }
-            offset += 16384;
-        }
-        // CHR-ROM banks
-        this.chrBanks = [];
-        for(var i = 0; i < this.chrCount; i++) {
-            this.chrBanks[i] = [];
-            for(var j = 0; j < 4096; j++) {
-                this.chrBanks[i][j] = buf[offset + j];
-            }
-            offset += 4096;
-        }
-    };
-}
-
 var Mappers = {};
-Mappers[0] = function() {
-    this.loadROM = function(rom, mem) {
-        // load PRG-ROM
-        if(rom.prgCount > 1) {
-            Utils.copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            Utils.copyArray(rom.prgBanks[1], 0, mem, 0xc000, 16384);
-        } else {
-            Utils.copyArray(rom.prgBanks[0], 0, mem, 0x8000, 16384);
-            Utils.copyArray(rom.prgBanks[0], 0, mem, 0xc000, 16384);
-        }
-        // load CHR-ROM
-        
-    };
+
+Mappers[0] = function(cartridge) {
+    this.cartridge = cartridge;
 };
 
 Mappers[0].prototype.load = function() {
+    var cpu = this.cartridge.cpu;
+    var ppu = this.cartridge.ppu;
+    var prgBuf = this.cartridge.prgBuf;
+    // load PRG-ROM
+    if(this.cartridge.prgCount > 1) {
+        cpu.mem.set(prgBuf, 0x8000);
+    } else {
+        cpu.mem.set(prgBuf, 0x8000);
+        cpu.mem.set(prgBuf, 0xc000);
+    }
+    // load CHR-ROM
     
 };
 
-function Cartridge() {
-    
+function Cartridge(cpu, ppu) {
+    this.cpu = cpu;
+    this.ppu = ppu;
 }
 
-Cartridge.prototype.load(buf, cpu, ppu) {
+Cartridge.prototype.load = function(buf) {
     if(buf[0] !== 0x4e
         || buf[1] !== 0x45
         || buf[2] !== 0x53
@@ -91,7 +34,7 @@ Cartridge.prototype.load(buf, cpu, ppu) {
     
     // PRG-ROM count(16KB)
     this.prgCount = buf[4];
-    // CHR-ROM count(4KB)
+    // CHR-ROM count(8KB)
     this.chrCount = buf[5];
     // 0-horizontal, 1-vertical
     this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
@@ -106,17 +49,17 @@ Cartridge.prototype.load(buf, cpu, ppu) {
     console.log('fourScreen: ' + this.fourScreen);
     console.log('mapperType: ' + this.mapperType);
     
-    this.mapper = new Mappers[this.mapperType]();
-    this.mapper.load({
-        buf: buf,
-        prgCount: this.prgCount,
-        chrCount: this.chrCount,
-        cpu: cpu,
-        ppu: ppu
-    });
+    var offset = 16;
+    if(this.trainer) {
+        offset += 512;
+    }
+    this.prgBuf = buf.slice(offset, offset + this.prgCount * 16384);
+    offset += this.prgBuf.length;
+    this.chrBuf = buf.slice(offset, offset + this.prgCount * 8192);
+    
+    this.mapper = new Mappers[this.mapperType](this);
+    this.mapper.load();
 };
-
-
 
 function CPU() {
     var ZERO_PAGE = 0;
@@ -519,20 +462,7 @@ function CPU() {
     
     this.reset = function() {
         // Main memory
-        this.mem = [];
-        for(var i = 0; i < 0x2000; i++) {
-            this.mem[i] = 0xff;
-        }
-        for(var i = 0; i < 4; i++) {
-            var j = i * 0x800;
-            this.mem[j + 0x008] = 0xf7;
-            this.mem[j + 0x009] = 0xef;
-            this.mem[j + 0x00a] = 0xdf;
-            this.mem[j + 0x00f] = 0xbf;
-        }
-        for(var i = 0x2001; i < 0x10000; i++) {
-            this.mem[i] = 0;
-        }
+        this.mem = new Uint8Array(0x10000);
         
         // CPU Registers
         this.regA = 0;
@@ -1382,12 +1312,11 @@ function printResult(result, err) {
 
 httpGet('./test.nes', 'arraybuffer', function(res) {
     var buf = new Uint8Array(res);
-    var rom = new ROM();
-    rom.load(buf);
     var cpu = new CPU();
     cpu.reset();
-    var mapper = new Mappers[rom.mapperType]();
-    mapper.loadROM(rom, cpu.mem);
+    var ppu = null;
+    var cartridge = new Cartridge(cpu, ppu);
+    cartridge.load(buf);
     httpGet('./test.log', 'text', function(content) {
         var lines = content.split(/\r?\n/);
         for(var i = 0; i < lines.length; i++) {
