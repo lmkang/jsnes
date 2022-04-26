@@ -506,6 +506,28 @@ CPU.prototype.pop = function() {
 };
 
 CPU.prototype.readByte = function(addr) {
+    if(addr < 0x2000) {
+        // 2KB CPU RAM and Mirrors
+        return this.mem[addr & 0x07ff];
+    } else if(addr < 0x4000) {
+        // PPU registers and Mirrors
+        return this.mem[addr & 0x2007];
+    } else if(addr === 0x4014) {
+        // OAM DMA
+        
+    } else if(addr === 0x4016) {
+        // Controller
+        
+    } else if(addr < 0x4018) {
+        // APU: $4000-$4013, $4015, $4017
+        
+    } else if(addr < 0x4020) {
+        // APU and I/O functionality that is normally disabled
+        
+    } else {
+        // PRG ROM, PRG RAM, and mapper registers
+        
+    }
     return this.mem[addr];
 };
 
@@ -516,7 +538,30 @@ CPU.prototype.read2Byte = function(addr) {
 };
 
 CPU.prototype.writeByte = function(addr, value) {
+    // TODO
     this.mem[addr] = value;
+    if(addr < 0x2000) {
+        // 2KB CPU RAM and Mirrors
+        this.mem[addr & 0x07ff] = value;
+    } else if(addr < 0x4000) {
+        // PPU registers and Mirrors
+        this.mem[addr & 0x2007] = value;
+    } else if(addr === 0x4014) {
+        // OAM DMA
+        
+    } else if(addr === 0x4016) {
+        // Controller
+        
+    } else if(addr < 0x4018) {
+        // APU: $4000-$4013, $4015, $4017
+        
+    } else if(addr < 0x4020) {
+        // APU and I/O functionality that is normally disabled
+        
+    } else {
+        // PRG ROM, PRG RAM, and mapper registers
+        
+    }
 };
 
 CPU.prototype.getFlags = function() {
