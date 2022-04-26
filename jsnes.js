@@ -1,15 +1,15 @@
 var Mappers = {};
 
-Mappers[0] = function(cartridge) {
-    this.cartridge = cartridge;
+Mappers[0] = function() {
+    
 };
 
-Mappers[0].prototype.load = function() {
-    var cpu = this.cartridge.cpu;
-    var ppu = this.cartridge.ppu;
-    var prgBuf = this.cartridge.prgBuf;
+Mappers[0].prototype.load = function(nes) {
+    var cpu = nes.cpu;
+    var ppu = nes.ppu;
+    var prgBuf = nes.prgBuf;
     // load PRG-ROM
-    if(this.cartridge.prgCount > 1) {
+    if(nes.prgCount > 1) {
         cpu.mem.set(prgBuf, 0x8000);
     } else {
         cpu.mem.set(prgBuf, 0x8000);
@@ -19,12 +19,11 @@ Mappers[0].prototype.load = function() {
     
 };
 
-function Cartridge(cpu, ppu) {
-    this.cpu = cpu;
-    this.ppu = ppu;
+function NES() {
+    
 }
 
-Cartridge.prototype.load = function(buf) {
+NES.prototype.load = function(buf) {
     if(buf[0] !== 0x4e
         || buf[1] !== 0x45
         || buf[2] !== 0x53
@@ -57,8 +56,8 @@ Cartridge.prototype.load = function(buf) {
     offset += this.prgBuf.length;
     this.chrBuf = buf.slice(offset, offset + this.prgCount * 8192);
     
-    this.mapper = new Mappers[this.mapperType](this);
-    this.mapper.load();
+    this.mapper = new Mappers[this.mapperType]();
+    this.mapper.load(this);
 };
 
 function CPU() {
@@ -1312,11 +1311,13 @@ function printResult(result, err) {
 
 httpGet('./test.nes', 'arraybuffer', function(res) {
     var buf = new Uint8Array(res);
+    var nes = new NES();
     var cpu = new CPU();
     cpu.reset();
     var ppu = null;
-    var cartridge = new Cartridge(cpu, ppu);
-    cartridge.load(buf);
+    nes.cpu = cpu;
+    nes.ppu = ppu;
+    nes.load(buf);
     httpGet('./test.log', 'text', function(content) {
         var lines = content.split(/\r?\n/);
         for(var i = 0; i < lines.length; i++) {
