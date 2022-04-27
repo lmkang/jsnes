@@ -8,6 +8,7 @@ Mappers[0].prototype.load = function(nes) {
     var cpu = nes.cpu;
     var ppu = nes.ppu;
     var prgBuf = nes.prgBuf;
+    var chrBuf = nes.chrBuf;
     // load PRG-ROM
     if(nes.prgCount > 1) {
         cpu.mem.set(prgBuf, 0x8000);
@@ -16,7 +17,16 @@ Mappers[0].prototype.load = function(nes) {
         cpu.mem.set(prgBuf, 0xc000);
     }
     // load CHR-ROM
-    
+    if(nes.chrCount > 0) {
+        if(nes.chrCount > 1) {
+            ppu.mem.set(chrBuf, 0x0000);
+        } else {
+            ppu.mem.set(chrBuf, 0x0000);
+            ppu.mem.set(chrBuf, 0x1000);
+        }
+    } else {
+        console.log('There are not any CHR-ROM banks');
+    }
 };
 
 function NES() {
@@ -1271,6 +1281,10 @@ CPU.prototype.step = function(callback) {
     }
 };
 
+function PPU() {
+    this.mem = new Uint8Array(0x4000);
+}
+
 
 // =====================================================
 
@@ -1363,7 +1377,7 @@ httpGet('./test.nes', 'arraybuffer', function(res) {
     var buf = new Uint8Array(res);
     var nes = new NES();
     var cpu = new CPU();
-    var ppu = null;
+    var ppu = new PPU();
     nes.cpu = cpu;
     nes.ppu = ppu;
     nes.load(buf);
