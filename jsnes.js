@@ -472,10 +472,12 @@ var OP_DATA = Object.freeze({
     0xF4: {name: Opcode.IGN, mode: AddrMode.ZERO_PAGE_X, len: 2, cycle: 4},
 });
 
-function CPU() {
+function CPU(nes) {
     // Main memory
     this.mem = new Uint8Array(0x10000);
     this.reset();
+    nes.cpu = this;
+    this.nes = nes;
 }
 
 CPU.prototype.reset = function() {
@@ -524,7 +526,7 @@ CPU.prototype.readByte = function(addr) {
         return this.mem[addr & 0x2007];
     } else if(addr === 0x4014) {
         // OAM DMA
-        
+        return 0;
     } else if(addr === 0x4016) {
         // Controller
         
@@ -1281,8 +1283,10 @@ CPU.prototype.step = function(callback) {
     }
 };
 
-function PPU() {
+function PPU(nes) {
     this.mem = new Uint8Array(0x4000);
+    nes.ppu = this;
+    this.nes = nes;
 }
 
 
@@ -1376,10 +1380,8 @@ function printResult(result, err) {
 httpGet('./test.nes', 'arraybuffer', function(res) {
     var buf = new Uint8Array(res);
     var nes = new NES();
-    var cpu = new CPU();
-    var ppu = new PPU();
-    nes.cpu = cpu;
-    nes.ppu = ppu;
+    var cpu = new CPU(nes);
+    var ppu = new PPU(nes);
     nes.load(buf);
     httpGet('./test.log', 'text', function(content) {
         var lines = content.split(/\r?\n/);
