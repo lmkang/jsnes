@@ -480,27 +480,6 @@ function CPU(nes) {
     this.nes = nes;
 }
 
-CPU.prototype.reset = function() {
-    // CPU Registers
-    this.regA = 0;
-    this.regX = 0;
-    this.regY = 0;
-    this.regSP = 0x01fd;
-    this.regPC = 0xC000;
-    
-    // flags
-    this.flagC = 0;
-    this.flagZ = 0;
-    this.flagI = 1;
-    this.flagD = 0;
-    this.flagB = 0;
-    this.flagU = 1;
-    this.flagV = 0;
-    this.flagN = 0;
-    
-    this.cycles = 7;
-};
-
 CPU.prototype.isCrossPage = function(addr1, addr2) {
     return (addr1 & 0xff00) !== (addr2 & 0xff00);
 };
@@ -518,24 +497,29 @@ CPU.prototype.pop = function() {
 };
 
 CPU.prototype.readByte = function(addr) {
+    var ppu = this.nes.ppu;
     if(addr < 0x2000) {
         // 2KB CPU RAM and Mirrors
         return this.mem[addr & 0x07ff];
     } else if(addr < 0x4000) {
         // PPU registers and Mirrors
-        return this.mem[addr & 0x2007];
+        //return this.mem[addr & 0x2007];
+        return ppu.readReg(addr & 0x2007);
     } else if(addr === 0x4014) {
         // OAM DMA
         return 0;
     } else if(addr === 0x4016) {
-        // Controller
+        // Controller1
+        
+    } else if(addr === 0x4017) {
+        // Controller2
         
     } else if(addr < 0x4018) {
         // APU: $4000-$4013, $4015, $4017
         
     } else if(addr < 0x4020) {
         // APU and I/O functionality that is normally disabled
-        
+        return 0;
     } else {
         // PRG ROM, PRG RAM, and mapper registers
         
@@ -550,6 +534,7 @@ CPU.prototype.read2Byte = function(addr) {
 };
 
 CPU.prototype.writeByte = function(addr, value) {
+    var ppu = this.nes.ppu;
     // TODO
     this.mem[addr] = value;
     if(addr < 0x2000) {
@@ -557,7 +542,8 @@ CPU.prototype.writeByte = function(addr, value) {
         this.mem[addr & 0x07ff] = value;
     } else if(addr < 0x4000) {
         // PPU registers and Mirrors
-        this.mem[addr & 0x2007] = value;
+        //this.mem[addr & 0x2007] = value;
+        ppu.writeReg(addr & 0x2007, value);
     } else if(addr === 0x4014) {
         // OAM DMA
         
@@ -596,6 +582,36 @@ CPU.prototype.setFlags = function(value) {
     this.flagU = 1;
     this.flagV = (value >> 6) & 1;
     this.flagN = (value >> 7) & 1;
+};
+
+CPU.prototype.nmi = function() {
+    this.push((this.regPC >> 8) & 0xff);
+    this.push(this.regPC & 0xff);
+    this.push(this.getStatus());
+    this.flagI = 1;
+    this.regPC = this.read2Byte(0xfffa);
+    this.cycles += 7;
+};
+
+CPU.prototype.reset = function() {
+    // CPU Registers
+    this.regA = 0;
+    this.regX = 0;
+    this.regY = 0;
+    this.regSP = 0x01fd;
+    this.regPC = this.read2Byte(0xfffc);
+    
+    // flags
+    this.flagC = 0;
+    this.flagZ = 0;
+    this.flagI = 1;
+    this.flagD = 0;
+    this.flagB = 0;
+    this.flagU = 1;
+    this.flagV = 0;
+    this.flagN = 0;
+    
+    this.cycles = 7;
 };
 
 CPU.prototype.step = function(callback) {
@@ -1287,7 +1303,582 @@ function PPU(nes) {
     this.mem = new Uint8Array(0x4000);
     nes.ppu = this;
     this.nes = nes;
+    
+    this.pixels = new Uint8Array(256 * 240);
+    this.oamMemory = new Uint8Array(256);
+    this.oamAddress = 0;
+    this.previousData = 0;
+    this.readBuffer = 0;
+    this.nmiDelay = 0;
+    this.latchs = {};
+    this.shiftRegister = {};
+    
+    this.frame = 0;
+    this.scanLine = 240;
+    this.cycle = 340;
+    this.spritePixels = [];
+    this.secondaryOam = new Array(8);
+    
+    this.register = {
+        v: 0,
+        t: 0,
+        x: 0,
+        w: 0
+    };
+    
+    var _this = this;
+    
+    this.controller = {
+        baseNameTableAddress: this.BASE_NAME_TABLE_ADDRS[0],
+        vramIncrementStepSize: 1,
+        spritePatternTableAddress: 0,
+        backgroundPatternTableAddress: 0,
+        spriteSize: 8,
+        isNMIEnabled: false
+    };
+    Object.defineProperty(this.controller, 'data', {
+        get: function() {
+            return 
+                _this.BASE_NAME_TABLE_ADDRS.indexOf(this.baseNameTableAddress)
+                | (this.vramIncrementStepSize === 1 ? 0 : 1) << 2
+                | (this.spritePatternTableAddress ? 1 : 0) << 3
+                | (this.backgroundPatternTableAddress ? 1 : 0) << 4
+                | (this.spriteSize === 8 ? 0 : 1) << 5
+                | (this.isNMIEnabled ? 1 : 0) << 7;
+        },
+        set: function(value) {
+            this.baseNameTableAddress = _this.BASE_NAME_TABLE_ADDRS[value & 0x3];
+            this.vramIncrementStepSize = value & 0x4 ? 32 : 1;
+            this.spritePatternTableAddress = value & 0x8 ? 0x1000 : 0;
+            this.backgroundPatternTableAddress = value & 0x10 ? 0x1000 : 0;
+            this.spriteSize = value & 0x20 ? 16 : 8;
+            this.isNMIEnabled = !!(value & 0x80);
+        }
+    });
+    
+    this.mask = {
+        isColorful: false,
+        isShowBackgroundLeft8px: false,
+        isShowSpriteLeft8px: false,
+        isShowBackground: false,
+        isShowSprite: false,
+        isEmphasizeRed: false,
+        isEmphasizeGreen: false,
+        isEmphasizeBlue: false
+    };
+    Object.defineProperty(this.mask, 'value', {
+        get: function() {
+            return
+                this.isColorful ? 0 : 1
+                | (this.isShowBackgroundLeft8px ? 1: 0) << 1
+                | (this.isShowSpriteLeft8px ? 1: 0) << 2
+                | (this.isShowBackground ? 1: 0) << 3
+                | (this.isShowSprite ? 1: 0) << 4
+                | (this.isEmphasizeRed ? 1: 0) << 5
+                | (this.isEmphasizeGreen ? 1: 0) << 6
+                | (this.isEmphasizeBlue ? 1: 0) << 7;
+        },
+        set: function(value) {
+            this.isColorful = !(value & 0x1);
+            this.isShowBackgroundLeft8px = !!(value & 0x2);
+            this.isShowSpriteLeft8px = !!(value & 0x4);
+            this.isShowBackground = !!(value & 0x8);
+            this.isShowSprite = !!(value & 0x10);
+            this.isEmphasizeRed = !!(value & 0x20);
+            this.isEmphasizeGreen = !!(value & 0x40);
+            this.isEmphasizeBlue = !!(value & 0x80);
+        }
+    });
+    
+    this.status = {
+        isSpriteOverflow: false,
+        isZeroSpriteHit: false,
+        isVBlankStarted: false
+    };
+    Object.defineProperty(this.status, 'value', {
+        get: function() {
+            return
+                (this.isSpriteOverflow ? 0x20 : 0)
+                | (this.isZeroSpriteHit ? 0x40 : 0)
+                | (this.isVBlankStarted ? 0x80 : 0);
+        }
+    });
 }
+
+PPU.prototype.BASE_NAME_TABLE_ADDRS = [
+    0x2000, 0x2400, 0x2800, 0x2c00
+];
+
+PPU.prototype.readByte = function(addr) {
+    addr &= 0x3fff;
+    if(addr < 0x2000) {
+        // Pattern table 0-1
+        return this.mem[addr];
+    } else if(addr < 0x3000) {
+        // Name table 0-3
+        return this.mem[this.parseMirrorAddress(addr)];
+    } else if(addr < 0x3f00) {
+        // Mirrors of $2000-$2EFF
+        return this.mem[this.parseMirrorAddress(addr - 0x1000)];
+    } else {
+        // Palette RAM indexes
+        addr &= 0x3f1f;
+        if(addr < 0x3f10) {
+            return this.mem[addr];
+        } else {
+            if(!(addr & 0x3)) {
+                addr -= 0x10;
+                return this.mem[addr];
+            }
+            return this.mem[addr];
+        }
+    }
+};
+
+PPU.prototype.writeByte = function(addr, value) {
+    addr &= 0x3fff;
+    if(addr < 0x2000) {
+        // Pattern table 0-1
+        this.mem[addr] = value;
+    } else if(addr < 0x3000) {
+        // Name table 0-3
+        this.mem[this.parseMirrorAddress(addr)] = value;
+    } else if(addr < 0x3f00) {
+        // Mirrors of $2000-$2EFF
+        this.mem[this.parseMirrorAddress(addr - 0x1000)] = value;
+    } else {
+        // Palette RAM indexes
+        addr &= 0x3f1f;
+        if(addr < 0x3f10) {
+            this.mem[addr] = value;
+        } else {
+            if(!(addr & 0x3)) {
+                addr -= 0x10;
+                this.mem[addr] = value;
+                return;
+            }
+            this.mem[addr] = value;
+        }
+    }
+};
+
+PPU.prototype.parseMirrorAddress = function(addr) {
+    if(this.fourScreen) {
+        return addr;
+    } else {
+        if(this.mirroring) {
+            return addr & 0x27ff;
+        } else {
+            return (addr & 0x23ff) | (addr & 0x0800 ? 0x0400 : 0);
+        }
+    }
+};
+
+PPU.prototype.readReg = function(addr) {
+    switch(addr) {
+        // PPUCTRL, RW
+        case 0x2000:
+            return this.controller.data;
+        
+        // PPUMASK, RW
+        case 0x2001:
+            return this.mask.data;
+        
+        // PPUSTATUS, R
+        case 0x2002:
+            return this.status.data | this.previousData;
+        
+        // OAMADDR, W
+        case 0x2003:
+            return 0;
+        
+        // OAMDATA, RW
+        case 0x2004:
+            return this.oamMemory[this.oamAddress];
+        
+        // PPUSCROLL, W
+        case 0x2005:
+            return 0;
+        
+        // PPUADDR, W
+        case 0x2006:
+            return 0;
+        
+        // PPUDATA, RW
+        case 0x2007:
+            var data = this.readByte(this.register.v);
+            if(this.register.v <= 0x3eff) {
+                var tmp = this.readBuffer;
+                this.readBuffer = data;
+                data = tmp;
+            } else {
+                this.readBuffer = this.readByte(this.register.v - 0x1000);
+            }
+            this.register.v += this.controller.vramIncrementStepSize;
+            this.register.v &= 0x7fff;
+            return data;
+    }
+};
+
+PPU.prototype.writeReg = function(addr, value) {
+    value &= 0xff;
+    this.previousData = value & 0x1f;
+    switch(addr) {
+        // PPUCTRL, RW
+        case 0x2000:
+            this.controller.data = value;
+            this.register.t = this.register.t & 0xf3ff | (value & 0x3) << 10;
+            break;
+        
+        // PPUMASK, RW
+        case 0x2001:
+            this.mask.data = value;
+            break;
+        
+        // PPUSTATUS, R
+        case 0x2002:
+            break;
+        
+        // OAMADDR, W
+        case 0x2003:
+            this.oamAddress = value;
+            break;
+        
+        // OAMDATA, RW
+        case 0x2004:
+            this.oamMemory[this.oamAddress++ & 0xff] = value;
+            break;
+        
+        // PPUSCROLL, W
+        case 0x2005:
+            if(this.register.w === 0) {
+                this.register.t = this.register.t & 0xffe0 | value >> 3;
+                this.register.x = value & 0x7;
+                this.register.w = 1;
+            } else {
+                this.register.t = this.register.t & 0x0c1f | (value & 0x7) << 12 | (value & 0xf8) << 2;
+                this.register.w = 0;
+            }
+            break;
+        
+        // PPUADDR, W
+        case 0x2006:
+            if(this.register.w === 0) {
+                this.register.t = this.register.t & 0x80ff | (value & 0x3f) << 8;
+                this.register.w = 1;
+            } else {
+                this.register.t = this.register.t & 0xff00 | value;
+                this.register.v = this.register.t;
+                this.register.w = 0;
+            }
+            break;
+        
+        // PPUDATA, RW
+        case 0x2007:
+            this.writeByte(this.register.v, value);
+            this.register.v += this.controller.vramIncrementStepSize;
+            break;
+    }
+};
+
+PPU.prototype.updateCycle = function() {
+    if(this.status.isVBlankStarted && this.controller.isNMIEnabled 
+        && ths.nmiDelay-- === 0) {
+        this.nes.cpu.nmi();
+    }
+    this.cycle++;
+    if(this.cycle > 340) {
+        this.cycle = 0;
+        this.scanLine++;
+        if(this.scanLine > 261) {
+            this.scanLine = 0;
+            this.frame++;
+            this.onFrame(this.pixels);
+        }
+    }
+    if(this.scanLine === 241 && this.cycle === 1) {
+        this.status.isVBlankStarted = true;
+        if(this.controller.isNMIEnabled) {
+            this.nmiDelay = 15;
+        }
+    }
+    if(this.scanLine === 261 && this.cycle === 1) {
+        this.status.isVBlankStarted = false;
+        this.status.isZeroSpriteHit = false;
+        this.status.isSpriteOverflow = false;
+    }
+    if(this.mask.isShowBackground || this.mask.isShowSprite) {
+        // ppu clock handle
+        
+    }
+};
+
+PPU.prototype.clock = function() {
+    if(this.scanLine === 261 && this.cycle === 339 
+        && this.frame & 0x01 
+        && (this.mask.isShowBackground || this.mask.isShowSprite)) {
+        this.updateCycle();
+    }
+    this.updateCycle();
+    if(!this.mask.isShowBackground && !this.mask.isShowSprite) {
+        return;
+    }
+    if(this.scanLine >= 0 && this.scanLine <= 239) {
+        if(this.cycle === 1) {
+            this.clearSecondaryOam();
+        }
+        if(this.cycle === 65) {
+            
+        }
+    }
+};
+
+PPU.prototype.clearSecondaryOam = function() {
+    if(!this.mask.isShowSprite) {
+        return;
+    }
+    for(var i = 0; i < this.secondaryOam.length; i++) {
+        var item = this.secondaryOam[i];
+        if(!item) {
+            item = {};
+        }
+        item.attributes = 0xff;
+        item.tileIndex = 0xff;
+        item.x = 0xff;
+        item.y = 0xff;
+    }
+};
+
+PPU.prototype.evalSprite = function() {
+    if(!this.mask.isShowSprite) {
+        return;
+    }
+    var spriteCount = 0;
+    for(var i = 0; i < 64; i++) {
+        var y = this.oamMemory[i * 4];
+        if(this.scanLine < y 
+            || (this.scanLine >= y + this.controller.spriteSize)) {
+            continue;
+        }
+        if(spriteCount === 8) {
+            this.status.isSpriteOverflow = true;
+            break;
+        }
+        var oam = this.secondaryOam[spriteCount++];
+        oam.y = y;
+        oam.tileIndex = this.oamMemory[i * 4 + 1];
+        oam.attributes = this.oamMemory[i * 4 + 2];
+        oam.x = this.oamMemory[i * 4 + 3];
+        oam.isZero = i === 0;
+    }
+};
+
+PPU.prototype.fetchSprite = function() {
+    if(!this.mask.isShowSprite) {
+        return;
+    }
+    this.spritePixels.fill(0);
+    for(const sprite of this.secondaryOam.reverse()) {
+        // Hidden sprite?
+        if(sprite.y >= 0xEF) {
+            continue;
+        }
+        const isBehind = !!(sprite.attributes & 0x20);
+        const isZero = sprite.isZero;
+        const isFlipH = !!(sprite.attributes & 0x40);
+        const isFlipV = !!(sprite.attributes & 0x80);
+        // Caculate tile address
+        let address;
+        if(this.controller.spriteSize === SpriteSize.SIZE_8X8) {
+            const baseAddress = this.controller.spritePatternTableAddress + (sprite.tileIndex << 4);
+            const offset = isFlipV ? (7 - this.scanLine + sprite.y) : (this.scanLine - sprite.y);
+            address = baseAddress + offset;
+        } else {
+            const baseAddress = ((sprite.tileIndex & 0x01) ? 0x1000 : 0x0000) + ((sprite.tileIndex & 0xFE) << 4);
+            const offset = isFlipV ? (15 - this.scanLine + sprite.y) : (this.scanLine - sprite.y);
+            address = baseAddress + offset % 8 + Math.floor(offset / 8) * 16;
+        }
+        // Fetch tile data
+        const tileL = this.bus.readByte(address);
+        const tileH = this.bus.readByte(address + 8);
+
+        // Generate sprite pixels
+        for(let i = 0; i < 8; i++) {
+            const b = isFlipH ? 0x01 << i : 0x80 >> i;
+            const bit0 = tileL & b ? 1 : 0;
+            const bit1 = tileH & b ? 1 : 0;
+            const bit2 = sprite.attributes & 0x01 ? 1 : 0;
+            const bit3 = sprite.attributes & 0x02 ? 1 : 0;
+            const index = bit3 << 3 | bit2 << 2 | bit1 << 1 | bit0;
+            if(index % 4 === 0 && (this.spritePixels[sprite.x + i] & 0x3f) % 4 !== 0) {
+                continue;
+            }
+            this.spritePixels[sprite.x + i] = index |
+                (isBehind ? 0x40 : 0) |
+                (isZero ? 0x80 : 0);
+      }
+    }
+};
+
+PPU.prototype.fetchTileRelatedData = function() {
+    if(!this.mask.isShowBackground) {
+        return;
+    }
+    switch(this.cycle & 0x07) {
+        case 1:
+            this.loadBackground();
+            this.fetchNameTable();
+            break;
+        case 3:
+            this.fetchAttributeTable();
+            break;
+        case 5:
+            this.fetchLowBackgroundTileByte();
+            break;
+        case 7:
+            this.fetchHighBackgroundTileByte();
+            break;
+        case 0:
+            this.incrementHorizontalPosition();
+            break;
+    }
+};
+
+PPU.prototype.fetchNameTable = function() {
+    const address = 0x2000 | (this.register.v & 0x0FFF);
+    this.latchs.nameTable = this.readByte(address);
+};
+
+PPU.prototype.fetchAttributeTable = function() {
+    const address = 0x23C0 |
+        (this.register.v & 0x0C00) |
+        ((this.register.v >> 4) & 0x38) |
+        ((this.register.v >> 2) & 0x07);
+    const isRight = !!(this.register.v & 0x02);
+    const isBottom = !!(this.register.v & 0x40);
+    const offset = (isBottom ? 0x02 : 0) | (isRight ? 0x01 : 0);
+    this.latchs.attributeTable = this.readByte(address) >> (offset << 1) & 0x03;
+};
+
+PPU.prototype.fetchLowBackgroundTileByte = function() {
+    const address = this.controller.backgroundPatternTableAddress +
+        this.latchs.nameTable * 16 +
+        (this.register.v >> 12 & 0x07);
+    this.latchs.lowBackgorundTailByte = this.readByte(address);
+};
+
+PPU.prototype.fetchHighBackgroundTileByte = function() {
+    const address = this.controller.backgroundPatternTableAddress +
+        this.latchs.nameTable * 16 +
+        (this.register.v >> 12 & 0x07) + 8;
+    this.latchs.highBackgorundTailByte = this.readByte(address);
+};
+
+PPU.prototype.loadBackground = function() {
+    this.shiftRegister.lowBackgorundTailBytes |= this.latchs.lowBackgorundTailByte;
+    this.shiftRegister.highBackgorundTailBytes |= this.latchs.highBackgorundTailByte;
+    this.shiftRegister.lowBackgroundAttributeByes |= (this.latchs.attributeTable & 0x01) ? 0xFF : 0;
+    this.shiftRegister.highBackgroundAttributeByes |= (this.latchs.attributeTable & 0x02) ? 0xFF : 0;
+};
+
+PPU.prototype.shiftBackground = function() {
+    if(!this.mask.isShowBackground) {
+        return;
+    }
+    this.shiftRegister.lowBackgorundTailBytes <<= 1;
+    this.shiftRegister.highBackgorundTailBytes <<= 1;
+    this.shiftRegister.lowBackgroundAttributeByes <<= 1;
+    this.shiftRegister.highBackgroundAttributeByes <<= 1;
+};
+
+PPU.prototype.incrementHorizontalPosition = function() {
+    if((this.register.v & 0x001F) === 31) {
+        this.register.v &= ~0x001F;
+        this.register.v ^= 0x0400;
+    } else {
+        this.register.v += 1;
+    }
+};
+
+PPU.prototype.incrementVerticalPosition = function() {
+    if((this.register.v & 0x7000) !== 0x7000) {
+        this.register.v += 0x1000;
+    } else {
+        this.register.v &= ~0x7000;
+        let y = (this.register.v & 0x03E0) >> 5;
+        if(y === 29) {
+            y = 0;
+            this.register.v ^= 0x0800;
+        } else if(y === 31) {
+            y = 0;
+        } else {
+            y += 1;
+        }
+        this.register.v = (this.register.v & ~0x03E0) | (y << 5);
+    }
+};
+
+PPU.prototype.copyHorizontalBits = function() {
+    // v: ....F.. ...EDCBA = t: ....F.. ...EDCBA
+    this.register.v = (this.register.v & 0b1111101111100000) | (this.register.t & ~0b1111101111100000) & 0x7FFF;
+};
+
+PPU.prototype.copyHorizontalBits = function() {
+    this.register.v = (this.register.v & 0b1111101111100000) | (this.register.t & ~0b1111101111100000) & 0x7FFF;
+};
+
+PPU.prototype.copyVerticalBits = function() {
+    // v: IHGF.ED CBA..... = t: IHGF.ED CBA.....
+    this.register.v = (this.register.v & 0b1000010000011111) | (this.register.t & ~0b1000010000011111) & 0x7FFF;
+};
+
+PPU.prototype.renderPixel = function() {
+    const x = this.cycle - 1;
+    const y = this.scanLine;
+    const offset = 0x8000 >> this.register.x;
+    const bit0 = this.shiftRegister.lowBackgorundTailBytes & offset ? 1 : 0;
+    const bit1 = this.shiftRegister.highBackgorundTailBytes & offset ? 1 : 0;
+    const bit2 = this.shiftRegister.lowBackgroundAttributeByes & offset ? 1 : 0;
+    const bit3 = this.shiftRegister.highBackgroundAttributeByes & offset ? 1 : 0;
+    const paletteIndex = bit3 << 3 | bit2 << 2 | bit1 << 1 | bit0 << 0;
+    const spritePaletteIndex = this.spritePixels[x] & SpritePixel.PALETTE;
+    const isTransparentSprite = spritePaletteIndex % 4 === 0 || !this.mask.isShowSprite;
+    const isTransparentBackground = paletteIndex % 4 === 0 || !this.mask.isShowBackground;
+    let address = 0x3F00;
+    if(isTransparentBackground) {
+        if(isTransparentSprite) {
+            // Do nothing
+        } else {
+            address = 0x3F10 + spritePaletteIndex;
+        }
+    } else {
+        if(isTransparentSprite) {
+            address = 0x3F00 + paletteIndex;
+        } else {
+            // Sprite 0 hit does not happen:
+            //   - If background or sprite rendering is disabled in PPUMASK ($2001)
+            //   - At x=0 to x=7 if the left-side clipping window is enabled (if bit 2 or bit 1 of PPUMASK is 0).
+            //   - At x=255, for an obscure reason related to the pixel pipeline.
+            //   - At any pixel where the background or sprite pixel is transparent (2-bit color index from the CHR pattern is %00).
+            //   - If sprite 0 hit has already occurred this frame. Bit 6 of PPUSTATUS ($2002) is cleared to 0 at dot 1 of the pre-render line.
+            //     This means only the first sprite 0 hit in a frame can be detected.
+            if(this.spritePixels[x] & SpritePixel.ZERO) {
+                if(
+                (!this.mask.isShowBackground || !this.mask.isShowSprite) ||
+                (0 <= x && x <= 7 && (!this.mask.isShowSpriteLeft8px || !this.mask.isShowBackgroundLeft8px)) ||
+                x === 255
+                // TODO: Only the first sprite 0 hit in a frame can be detected.
+                ) {
+                    // Sprite 0 hit does not happen
+                } else {
+                    this.status.isZeroSpriteHit = true;
+                }
+            }
+            address = this.spritePixels[x] & SpritePixel.BEHIND_BG ? 0x3F00 + paletteIndex : 0x3F10 + spritePaletteIndex;
+        }
+    }
+    this.pixels[x + y * 256] = this.bus.readByte(address);
+};
 
 
 // =====================================================
