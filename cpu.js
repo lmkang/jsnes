@@ -451,7 +451,6 @@ CPU.prototype.readByte = function(addr) {
         return this.mem[addr & 0x07ff];
     } else if(addr < 0x4000) {
         // PPU registers and Mirrors
-        //return this.mem[addr & 0x2007];
         return ppu.readReg(addr & 0x2007);
     } else if(addr === 0x4014) {
         // OAM DMA
@@ -490,7 +489,6 @@ CPU.prototype.writeByte = function(addr, value) {
         this.mem[addr & 0x07ff] = value;
     } else if(addr < 0x4000) {
         // PPU registers and Mirrors
-        //this.mem[addr & 0x2007] = value;
         ppu.writeReg(addr & 0x2007, value);
     } else if(addr === 0x4014) {
         // OAM DMA
@@ -643,7 +641,7 @@ CPU.prototype.step = function(callback) {
                 addr = this.readByte(addr) 
                     | this.readByte(addr & 0xff00) << 8;
             } else {
-                addr = this.read2Byte(addr);
+                addr = this.read2Bytes(addr);
             }
             break;
     }
