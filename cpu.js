@@ -2,7 +2,6 @@ function CPU(nes) {
     nes.cpu = this;
     this.nes = nes;
     this.mem = new Uint8Array(0x10000);
-    this.reset();
 }
 
 CPU.prototype = {
@@ -425,7 +424,28 @@ CPU.prototype.reset = function() {
         V: 0,
         N: 0
     };
-    this.cycle = 7;
+    this.suspendCycle = 0;
+    this.deferCycle = 8;
+    this.clocks = 0;
+};
+
+CPU.prototype.irq = function() {
+    if(this.flag.I) {
+        return;
+    }
+    
+};
+
+CPU.prototype.clock = function() {
+    if(this.suspendCycle > 0) {
+        this.suspendCycle--;
+        return;
+    }
+    if(this.deferCycle === 0) {
+        this.deferCycle = this.step();
+    }
+    this.deferCycle--;
+    this.clocks++;
 };
 
 CPU.prototype.isCrossPage = function(addr1, addr2) {
@@ -433,15 +453,15 @@ CPU.prototype.isCrossPage = function(addr1, addr2) {
 };
 
 CPU.prototype.push = function(value) {
-    this.writeByte(this.regSP, value);
-    this.regSP--;
-    this.regSP = 0x0100 | (this.regSP & 0xff);
+    this.writeByte(this.reg.SP, value);
+    this.reg.SP--;
+    this.reg.SP = 0x0100 | (this.reg.SP & 0xff);
 };
 
 CPU.prototype.pop = function() {
-    this.regSP++;
-    this.regSP = 0x0100 | (this.regSP & 0xff);
-    return this.readByte(this.regSP);
+    this.reg.SP++;
+    this.reg.SP = 0x0100 | (this.reg.SP & 0xff);
+    return this.readByte(this.reg.SP);
 };
 
 CPU.prototype.readByte = function(addr) {
@@ -550,14 +570,13 @@ CPU.prototype.step = function(callback) {
         X: this.reg.X,
         Y: this.reg.Y,
         P: this.getFlag(),
-        SP: this.reg.SP & 0xff,
-        CYC: this.cycle
+        SP: this.reg.SP & 0xff
     };
     callback(result);
     // =============test end===============
     
     this.reg.PC += opinf.len;
-    this.cycle += opinf.cycle;
+    var cycle = opinf.cycle;
     var name = opinf.name;
     var mode = opinf.mode;
     var addr = 0;
@@ -660,14 +679,14 @@ CPU.prototype.step = function(callback) {
             this.flag.N = (tmp >> 7) & 1;
             this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
             this.reg.A = tmp & 0xff;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.AND:
             this.reg.A &= this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
             this.flag.Z = this.reg.A === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.ASL:
@@ -688,9 +707,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BCC:
             if(this.flag.C === 0) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -698,9 +717,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BCS:
             if(this.flag.C === 1) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -708,9 +727,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BEQ:
             if(this.flag.Z === 1) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                   cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -726,16 +745,16 @@ CPU.prototype.step = function(callback) {
         
         case this.BMI:
             if(this.flag.N === 1) {
-                this.cycle += 1;
+                cycle += 1;
                 this.reg.PC = addr;
             }
             break;
         
         case this.BNE:
             if(this.flag.Z === 0) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -743,9 +762,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BPL:
             if(this.flag.N === 0) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -764,9 +783,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BVC:
             if(this.flag.V === 0) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -774,9 +793,9 @@ CPU.prototype.step = function(callback) {
         
         case this.BVS:
             if(this.flag.V === 1) {
-                this.cycle += 1;
+                cycle += 1;
                 if(this.isCrossPage(this.reg.PC, addr)) {
-                    this.cycle += 1;
+                    cycle += 1;
                 }
                 this.reg.PC = addr;
             }
@@ -803,7 +822,7 @@ CPU.prototype.step = function(callback) {
             this.flag.C = tmp >= 0 ? 1 : 0;
             this.flag.N = (tmp >> 7) & 1;
             this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.CPX:
@@ -843,7 +862,7 @@ CPU.prototype.step = function(callback) {
             this.reg.A = (this.readByte(addr) ^ this.reg.A) & 0xff;
             this.flag.N = (this.reg.A >> 7) & 1;
             this.flag.Z = this.reg.A === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.INC:
@@ -881,21 +900,21 @@ CPU.prototype.step = function(callback) {
             this.reg.A = this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
             this.flag.Z = this.reg.A === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.LDX:
             this.reg.X = this.readByte(addr);
             this.flag.N = (this.reg.X >> 7) & 1;
             this.flag.Z = this.reg.X === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.LDY:
             this.reg.Y = this.readByte(addr);
             this.flag.N = (this.reg.Y >> 7) & 1;
             this.flag.Z = this.reg.Y === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.LSR:
@@ -923,7 +942,7 @@ CPU.prototype.step = function(callback) {
             this.flag.N = (tmp >> 7) & 1;
             this.flag.Z = tmp === 0 ? 1 : 0;
             this.reg.A = tmp;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.PHA:
@@ -1011,7 +1030,7 @@ CPU.prototype.step = function(callback) {
             }
             this.flag.C = tmp >= 0 ? 1 : 0;
             this.reg.A = tmp & 0xff;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.SEC:
@@ -1114,7 +1133,7 @@ CPU.prototype.step = function(callback) {
             this.reg.A = this.reg.X = this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
             this.flag.Z = this.reg.A === 0 ? 1 : 0;
-            this.cycle += cycleAdd;
+            cycle += cycleAdd;
             break;
         
         case this.SAX:
@@ -1203,10 +1222,11 @@ CPU.prototype.step = function(callback) {
         case this.IGN:
             this.readByte(addr);
             if(mode !== this.INDIRECT_Y) {
-                this.cycle += cycleAdd;
+                cycle += cycleAdd;
             }
             break;
     }
+    return cycle;
 };
 
 
