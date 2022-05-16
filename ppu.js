@@ -91,7 +91,7 @@ PPU.prototype.clock = function() {
                     || (this.scanline >= y + spriteSize)) {
                     continue;
                 }
-                // Overflow
+                // Overflow?
                 if(spriteCount === 8) {
                     this.status.spriteOverflow = 1;
                     break;
@@ -219,7 +219,7 @@ PPU.prototype.updateCycle = function() {
     if(this.status.vblankStarted && this.controller.generateNMI
         && this.nmiDelay-- === 0) {
         // NMI
-        
+        this.nes.cpu.nmi();
     }
     this.cycle++;
     if(this.cycle > 340) {
@@ -557,7 +557,7 @@ PPU.prototype.writeReg = function(addr, value) {
     }
 };
 
-ppu.prototype.readByte = function(addr) {
+PPU.prototype.readByte = function(addr) {
     addr &= 0x3fff;
     // name table 0-3
     if(addr >= 0x2000 && addr < 0x3000) {
@@ -574,7 +574,7 @@ ppu.prototype.readByte = function(addr) {
     return this.mem[addr];
 };
 
-ppu.prototype.writeByte = function(addr, value) {
+PPU.prototype.writeByte = function(addr, value) {
     addr &= 0x3fff;
     // name table 0-3
     if(addr >= 0x2000 && addr < 0x3000) {
@@ -603,7 +603,11 @@ PPU.prototype.parseMirrorAddr = function(addr) {
     }
 };
 
-
+PPU.prototype.writeOAM = function(buf) {
+    for(var i = 0; i < this.oamMem.length; i++) {
+        this.oamMem[(i + this.oamAddr) & 0xff] = buf[i];
+    }
+};
 
 
 

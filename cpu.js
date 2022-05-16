@@ -93,7 +93,8 @@ CPU.prototype = {
     INDIRECT: 12,
 };
 
-CPU.prototype.OPDATA = Object.freeze({
+CPU.prototype.opdata = function() {
+return Object.freeze({
     // http://6502.org/tutorials/6502opcodes.html
     
     // ADC
@@ -405,6 +406,7 @@ CPU.prototype.OPDATA = Object.freeze({
     0xD4: {name: this.IGN, mode: this.ZERO_PAGE_X, len: 2, cycle: 4},
     0xF4: {name: this.IGN, mode: this.ZERO_PAGE_X, len: 2, cycle: 4},
 });
+};
 
 CPU.prototype.reset = function() {
     this.reg = {
@@ -433,7 +435,19 @@ CPU.prototype.irq = function() {
     if(this.flag.I) {
         return;
     }
-    
+    this.push2Bytes(this.reg.PC);
+    this.pushByte(this.getFlag());
+    this.flag.I = 1;
+    this.reg.PC = this.read2Bytes(0xfffe);
+    this.deferCycle += 7;
+};
+
+CPU.prototype.nmi = function() {
+    this.push2Bytes(this.reg.PC);
+    this.pushByte(this.getFlag());
+    this.flag.I = 1;
+    this.reg.PC = this.read2Bytes(0xfffa);
+    this.deferCycle += 7;
 };
 
 CPU.prototype.clock = function() {
@@ -452,16 +466,25 @@ CPU.prototype.isCrossPage = function(addr1, addr2) {
     return (addr1 & 0xff00) !== (addr2 & 0xff00);
 };
 
-CPU.prototype.push = function(value) {
+CPU.prototype.pushByte = function(value) {
     this.writeByte(this.reg.SP, value);
     this.reg.SP--;
     this.reg.SP = 0x0100 | (this.reg.SP & 0xff);
 };
 
-CPU.prototype.pop = function() {
+CPU.prototype.push2Bytes = function(value) {
+    this.pushByte((value >> 8) & 0xff);
+    this.pushByte(value & 0xff);
+};
+
+CPU.prototype.popByte = function() {
     this.reg.SP++;
     this.reg.SP = 0x0100 | (this.reg.SP & 0xff);
     return this.readByte(this.reg.SP);
+};
+
+CPU.prototype.pop2Bytes = function() {
+    return this.popByte() | this.popByte() << 8;
 };
 
 CPU.prototype.readByte = function(addr) {
@@ -512,7 +535,13 @@ CPU.prototype.writeByte = function(addr, value) {
         ppu.writeReg(addr & 0x2007, value);
     } else if(addr === 0x4014) {
         // OAM DMA
-        
+        var j = value << 8;
+        var buf = new Uint8Array(256);
+        for(var i = 0; i < buf.length; i++) {
+            buf[i] = this.readByte(j + i);
+        }
+        ppu.writeOAM(buf);
+        this.suspendCycle += 513;
     } else if(addr === 0x4016) {
         // Controller
         
@@ -551,7 +580,7 @@ CPU.prototype.getFlag = function() {
 };
 
 CPU.prototype.step = function(callback) {
-    var opinf = this.OPDATA[this.readByte(this.reg.PC)];
+    var opinf = this.opdata()[this.readByte(this.reg.PC)];
     if(!opinf) {
         console.log('unknown opcode: $' + this.readByte(this.reg.PC).toString(16));
         return;
@@ -572,7 +601,9 @@ CPU.prototype.step = function(callback) {
         P: this.getFlag(),
         SP: this.reg.SP & 0xff
     };
-    callback(result);
+    if(callback) {
+        callback(result);
+    }
     // =============test end===============
     
     this.reg.PC += opinf.len;
@@ -772,10 +803,10 @@ CPU.prototype.step = function(callback) {
         
         case this.BRK:
             this.reg.PC += 2;
-            this.push((this.reg.PC >> 8) & 0xff);
-            this.push(this.reg.PC & 0xff);
+            this.push2Bytes(this.reg.PC);
             this.flag.B = 1;
-            this.push(this.getFlag());
+            this.pushByte(this.getFlag());
+            this.flag.B = 0;
             this.flag.I = 1;
             this.reg.PC = this.read2Bytes(0xfffe);
             this.reg.PC--;
@@ -891,8 +922,7 @@ CPU.prototype.step = function(callback) {
         
         case this.JSR:
             tmp = this.reg.PC - 1;
-            this.push((tmp >> 8) & 0xff);
-            this.push(tmp & 0xff);
+            this.push2Bytes(tmp);
             this.reg.PC = addr;
             break;
         
@@ -946,23 +976,23 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.PHA:
-            this.push(this.reg.A);
+            this.pushByte(this.reg.A);
             break;
         
         case this.PHP:
             this.flag.B = 1;
-            this.push(this.getFlag());
+            this.pushByte(this.getFlag());
             this.flag.B = 0;
             break;
         
         case this.PLA:
-            this.reg.A = this.pop();
+            this.reg.A = this.popByte();
             this.flag.N = (this.reg.A >> 7) & 1;
             this.flag.Z = this.reg.A === 0 ? 1 : 0;
             break;
         
         case this.PLP:
-            tmp = this.pop();
+            tmp = this.popByte();
             this.setFlag(tmp);
             this.flag.B = 0;
             break;
@@ -1003,16 +1033,16 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.RTI:
-            tmp = this.pop();
+            tmp = this.popByte();
             this.setFlag(tmp);
-            this.reg.PC = this.pop() | this.pop() << 8;
+            this.reg.PC = this.pop2Bytes();
             if(this.reg.PC === 0xffff) {
                 return;
             }
             break;
         
         case this.RTS:
-            this.reg.PC = (this.pop() | this.pop() << 8) + 1;
+            this.reg.PC = this.pop2Bytes() + 1;
             if(this.reg.PC === 0xffff) {
                 return;
             }
