@@ -71,6 +71,9 @@ PPU.prototype.clock = function() {
         // cycle 1-64: clear secondary OAM
         if(this.cycle === 1 && this.mask.showSprite) {
             for(var i = 0; i < this.secondaryOAM.length; i++) {
+                if(!this.secondaryOAM[i]) {
+                    this.secondaryOAM[i] = {};
+                }
                 this.secondaryOAM[i].y = 0xff;
                 this.secondaryOAM[i].tileIndex = 0xff;
                 this.secondaryOAM[i].attribute = 0xff;
