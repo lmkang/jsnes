@@ -53,7 +53,7 @@ function PPU(nes) {
 
 PPU.prototype.clock = function() {
     if(this.scanline === 261 && this.cycle === 339
-        &&(this.frame & 0x01)
+        && (this.frame & 0x01)
         && (this.mask.showBackground || this.mask.showSprite)) {
         this.updateCycle();
     }
@@ -84,10 +84,7 @@ PPU.prototype.clock = function() {
         // cycle 65-256: sprite evaluation for next scanline
         if(this.cycle === 65 && this.mask.showSprite) {
             var spriteCount = 0;
-            var spriteSize = 8;
-            if(this.controller.spriteSize) {
-                spriteSize = 16;
-            }
+            var spriteSize = this.controller.spriteSize ? 16 : 8;
             for(var i = 0; i < 64; i++) {
                 var y = this.oamMem[i * 4];
                 if(this.scanline < y
@@ -143,7 +140,7 @@ PPU.prototype.clock = function() {
                 var flipV = sprite.attribute & 0x80;
                 var addr;
                 if(this.controller.spriteSize === 0) {
-                    var baseAddr = this.controller.spritePTAddr + (sprite.tileIndex << 4);
+                    var baseAddr = (this.controller.spritePTAddr ? 0x1000 : 0) + (sprite.tileIndex << 4);
                     var offset = flipV ? (7 - this.scanline + sprite.y) : (this.scanline - sprite.y);
                     addr = baseAddr + offset;
                 } else {
@@ -267,8 +264,8 @@ PPU.prototype.renderPixel = function() {
     var offset = 0x8000 >> this.reg.x;
     var bit0 = this.shiftReg.lowTailByte & offset ? 1 : 0;
     var bit1 = this.shiftReg.highTailByte & offset ? 1 : 0;
-    var bit2 = this.shiftReg.lowAttribute & offset ? 1 : 0;
-    var bit3 = this.shiftReg.highAttribute & offset ? 1 : 0;
+    var bit2 = this.shiftReg.lowAttributeByte & offset ? 1 : 0;
+    var bit3 = this.shiftReg.highAttributeByte & offset ? 1 : 0;
     var paletteIndex = bit3 << 3 | bit2 << 2 | bit1 << 1 | bit0;
     var spritePaletteIndex = this.spritePixels[x] & 0x3f;
     var isTransparentSprite = spritePaletteIndex % 4 === 0
@@ -310,15 +307,12 @@ PPU.prototype.fetchTileData = function() {
     if(!this.mask.showBackground) {
         return;
     }
+    var addr;
+    var offset;
     switch(this.cycle & 0x07) {
         // increment horizontal position
         case 0:
-            if((this.reg.v & 0x001f) === 31) {
-                this.reg.v &= ~0x001f;
-                this.reg.v ^= 0x0400;
-            } else {
-                this.reg.v++;
-            }
+            this.incHorizontal();
             break;
         
         // load background
@@ -331,25 +325,23 @@ PPU.prototype.fetchTileData = function() {
             this.shiftReg.highAttributeByte |= (this.latch.attributeTable & 0x02) ? 0xff : 0;
             
             // fetch name table
-            var addr = 0x2000 | (this.reg.v & 0x0fff);
+            addr = 0x2000 | (this.reg.v & 0x0fff);
             this.latch.nameTable = this.readByte(addr);
             break;
         
         // fetch attribute table
         case 3:
-            var addr = 0x23c0
+            addr = 0x23c0
                 | (this.reg.v & 0x0c00)
                 | ((this.reg.v >> 4) & 0x38)
                 | ((this.reg.v >> 2) & 0x07);
-            var isRight = this.reg.v & 0x02;
-            var isBottom = this.reg.v & 0x40;
-            var offset = (isBottom ? 0x02 : 0) | (isRight ? 0x01 : 0);
+            offset = ((this.reg.v & 0x40) ? 0x02 : 0) | ((this.reg.v & 0x02) ? 0x01 : 0);
             this.latch.attributeTable = this.readByte(addr) >> (offset << 1) & 0x03;
             break;
         
         // fetch low background tile byte
         case 5:
-            var addr = this.controller.backgroundPTAddr 
+            addr = (this.controller.backgroundPTAddr ? 0x1000 : 0)
                 + this.latch.nameTable * 16 
                 + (this.reg.v >> 12 & 0x07);
             this.latch.lowTailByte = this.readByte(addr);
@@ -357,7 +349,7 @@ PPU.prototype.fetchTileData = function() {
         
         // fetch high background tile byte
         case 7:
-            var addr = this.controller.backgroundPTAddr
+            addr = (this.controller.backgroundPTAddr ? 0x1000 : 0)
                 + this.latch.nameTable * 16
                 + (this.reg.v >> 12 & 0x07) 
                 + 8;
@@ -367,7 +359,7 @@ PPU.prototype.fetchTileData = function() {
 };
 
 PPU.prototype.incHorizontal = function() {
-    if((this.reg.v & 0x001f) === 31) {
+    if((this.reg.v & 0x001f) === 0x1f) {
         this.reg.v &= ~0x001f;
         this.reg.v ^= 0x0400;
     } else {
@@ -395,7 +387,7 @@ PPU.prototype.incVertical = function() {
 
 PPU.prototype.copyHorizontal = function() {
     this.reg.v = (this.reg.v & 0xfbe0) 
-        | (this.reg.t & ~0xfbe0) & 0x7ffff;
+        | (this.reg.t & ~0xfbe0) & 0x7fff;
 };
 
 PPU.prototype.copyVertical = function() {
@@ -491,7 +483,7 @@ PPU.prototype.readReg = function(addr) {
             } else {
                 this.readBuffer = this.readByte(this.reg.v - 0x1000);
             }
-            this.reg.v += this.controller.vramAddrInc;
+            this.reg.v += this.controller.vramAddrInc ? 32 : 1;
             this.reg.v &= 0x7fff;
             return data;
     }
@@ -555,7 +547,7 @@ PPU.prototype.writeReg = function(addr, value) {
         // PPUDATA
         case 0x2007:
             this.writeByte(this.reg.v, value);
-            this.reg.v += this.controller.vramAddrInc;
+            this.reg.v += this.controller.vramAddrInc ? 32 : 1;
             break;
     }
 };
