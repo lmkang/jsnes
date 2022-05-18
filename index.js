@@ -29,6 +29,31 @@ Mappers[0].prototype.load = function(nes) {
     }
 };
 
+Mappers[2] = function() {
+    
+};
+
+Mappers[2].prototype.load = function(nes) {
+    var cpu = nes.cpu;
+    var ppu = nes.ppu;
+    var prgBuf = nes.prgBuf;
+    var chrBuf = nes.chrBuf;
+    console.log(nes.prgCount, nes.chrCount);
+    // load PRG-ROM
+    cpu.mem.set(prgBuf.subarray(0, 16384), 0x8000);
+    // load CHR-ROM
+    if(nes.chrCount > 0) {
+        if(nes.chrCount > 1) {
+            ppu.mem.set(chrBuf, 0x0000);
+        } else {
+            ppu.mem.set(chrBuf, 0x0000);
+            ppu.mem.set(chrBuf, 0x1000);
+        }
+    } else {
+        console.log('There are not any CHR-ROM banks');
+    }
+};
+
 function NES() {
     
 }
@@ -188,7 +213,7 @@ function parsePalettePixels(buf) {
     return r;
 }
 
-httpGet('./test.nes', 'arraybuffer', function(res) {
+httpGet('./contra.nes', 'arraybuffer', function(res) {
     var canvas = document.createElement('canvas');
     canvas.style = 'width: 256px; height: 240px;';
     document.body.appendChild(canvas);
@@ -212,8 +237,29 @@ httpGet('./test.nes', 'arraybuffer', function(res) {
     };
     var cpu = new CPU(nes);
     var ppu = new PPU(nes);
+    var controller1 = new Controller();
+    var controller2 = new Controller();
+    nes.controller1 = controller1;
+    nes.controller2 = controller2;
     nes.load(buf);
     cpu.reset();
+    function handleKeyboard(e) {
+        var keyMap = {
+            'KeyW': 0x08,
+            'KeyS': 0x04,
+            'KeyA': 0x02,
+            'KeyD': 0x01,
+            'Enter': 0x10,
+            'ShiftRight': 0x20,
+            'KeyL': 0x80,
+            'KeyK': 0x40
+        };
+        var value = keyMap[e.code];
+        controller1.pressButton(value, e.type === 'keydown');
+        controller2.pressButton(value, e.type === 'keydown');
+    }
+    document.addEventListener('keydown', handleKeyboard);
+    document.addEventListener('keyup', handleKeyboard);
     requestAnimationFrame(function loop() {
         var frame = ppu.frame;
         while(1) {

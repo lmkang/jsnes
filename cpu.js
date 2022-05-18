@@ -489,6 +489,8 @@ CPU.prototype.pop2Bytes = function() {
 
 CPU.prototype.readByte = function(addr) {
     var ppu = this.nes.ppu;
+    var controller1 = this.nes.controller1;
+    var controller2 = this.nes.controller2;
     if(addr < 0x2000) {
         // 2KB CPU RAM and Mirrors
         return this.mem[addr & 0x07ff];
@@ -500,10 +502,10 @@ CPU.prototype.readByte = function(addr) {
         return 0;
     } else if(addr === 0x4016) {
         // Controller1
-        
+        return controller1.readByte();
     } else if(addr === 0x4017) {
         // Controller2
-        
+        return controller2.readByte();
     } else if(addr < 0x4018) {
         // APU: $4000-$4013, $4015, $4017
         
@@ -525,6 +527,8 @@ CPU.prototype.read2Bytes = function(addr) {
 
 CPU.prototype.writeByte = function(addr, value) {
     var ppu = this.nes.ppu;
+    var controller1 = this.nes.controller1;
+    var controller2 = this.nes.controller2;
     // TODO
     this.mem[addr] = value;
     if(addr < 0x2000) {
@@ -544,7 +548,8 @@ CPU.prototype.writeByte = function(addr, value) {
         this.suspendCycle += 513;
     } else if(addr === 0x4016) {
         // Controller
-        
+        controller1.writeByte(value);
+        controller2.writeByte(value);
     } else if(addr < 0x4018) {
         // APU: $4000-$4013, $4015, $4017
         
