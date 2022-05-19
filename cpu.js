@@ -1,7 +1,7 @@
 function CPU(nes) {
     nes.cpu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x10000);
+    this.mem = new Uint8Array(0x800);
 }
 
 CPU.prototype = {
@@ -508,15 +508,14 @@ CPU.prototype.readByte = function(addr) {
         return controller2.readByte();
     } else if(addr < 0x4018) {
         // APU: $4000-$4013, $4015, $4017
-        
+        return 0;
     } else if(addr < 0x4020) {
         // APU and I/O functionality that is normally disabled
         return 0;
     } else {
         // PRG ROM, PRG RAM, and mapper registers
-        
+        return this.nes.mapper.readByte(addr);
     }
-    return this.mem[addr];
 };
 
 CPU.prototype.read2Bytes = function(addr) {
@@ -529,8 +528,6 @@ CPU.prototype.writeByte = function(addr, value) {
     var ppu = this.nes.ppu;
     var controller1 = this.nes.controller1;
     var controller2 = this.nes.controller2;
-    // TODO
-    this.mem[addr] = value;
     if(addr < 0x2000) {
         // 2KB CPU RAM and Mirrors
         this.mem[addr & 0x07ff] = value;
@@ -558,7 +555,7 @@ CPU.prototype.writeByte = function(addr, value) {
         
     } else {
         // PRG ROM, PRG RAM, and mapper registers
-        
+        this.nes.mapper.writeByte(addr, value);
     }
 };
 
@@ -590,6 +587,7 @@ CPU.prototype.step = function(callback) {
         console.log('unknown opcode: $' + this.readByte(this.reg.PC).toString(16));
         return;
     }
+    //console.log(this.reg.PC.toString(16), this.readByte(this.reg.PC).toString(16), opinf);
     var opaddr = this.reg.PC;
     
     // =============test start===============
@@ -926,8 +924,7 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.JSR:
-            tmp = this.reg.PC - 1;
-            this.push2Bytes(tmp);
+            this.push2Bytes(this.reg.PC - 1);
             this.reg.PC = addr;
             break;
         

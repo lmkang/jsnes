@@ -1,59 +1,3 @@
-var Mappers = {};
-
-Mappers[0] = function() {
-    
-};
-
-Mappers[0].prototype.load = function(nes) {
-    var cpu = nes.cpu;
-    var ppu = nes.ppu;
-    var prgBuf = nes.prgBuf;
-    var chrBuf = nes.chrBuf;
-    // load PRG-ROM
-    if(nes.prgCount > 1) {
-        cpu.mem.set(prgBuf, 0x8000);
-    } else {
-        cpu.mem.set(prgBuf, 0x8000);
-        cpu.mem.set(prgBuf, 0xc000);
-    }
-    // load CHR-ROM
-    if(nes.chrCount > 0) {
-        if(nes.chrCount > 1) {
-            ppu.mem.set(chrBuf, 0x0000);
-        } else {
-            ppu.mem.set(chrBuf, 0x0000);
-            ppu.mem.set(chrBuf, 0x1000);
-        }
-    } else {
-        console.log('There are not any CHR-ROM banks');
-    }
-};
-
-Mappers[2] = function() {
-    
-};
-
-Mappers[2].prototype.load = function(nes) {
-    var cpu = nes.cpu;
-    var ppu = nes.ppu;
-    var prgBuf = nes.prgBuf;
-    var chrBuf = nes.chrBuf;
-    console.log(nes.prgCount, nes.chrCount);
-    // load PRG-ROM
-    cpu.mem.set(prgBuf.subarray(0, 16384), 0x8000);
-    // load CHR-ROM
-    if(nes.chrCount > 0) {
-        if(nes.chrCount > 1) {
-            ppu.mem.set(chrBuf, 0x0000);
-        } else {
-            ppu.mem.set(chrBuf, 0x0000);
-            ppu.mem.set(chrBuf, 0x1000);
-        }
-    } else {
-        console.log('There are not any CHR-ROM banks');
-    }
-};
-
 function NES() {
     
 }
@@ -89,10 +33,8 @@ NES.prototype.load = function(buf) {
     }
     this.prgBuf = buf.slice(offset, offset + this.prgCount * 16384);
     offset += this.prgBuf.length;
-    this.chrBuf = buf.slice(offset, offset + this.prgCount * 8192);
-    
-    this.mapper = new Mappers[this.mapperType]();
-    this.mapper.load(this);
+    this.chrBuf = buf.slice(offset, offset + this.chrCount * 8192);
+    this.mapper = new Mappers[this.mapperType](this);
 };
 
 function httpGet(url, responseType, callback) {
@@ -213,7 +155,7 @@ function parsePalettePixels(buf) {
     return r;
 }
 
-httpGet('./contra.nes', 'arraybuffer', function(res) {
+httpGet('./lj65.nes', 'arraybuffer', function(res) {
     var canvas = document.createElement('canvas');
     canvas.style = 'width: 256px; height: 240px;';
     document.body.appendChild(canvas);

@@ -1,7 +1,8 @@
 function PPU(nes) {
     nes.ppu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x4000);
+    this.mem = new Uint8Array(0x1000);
+    this.palettes = new Uint8Array(0x20);
     this.pixels = new Uint8Array(256 * 240);
     this.oamMem = new Uint8Array(256);
     this.oamAddr = 0;
@@ -23,7 +24,7 @@ function PPU(nes) {
     this.frame = 0;
     this.scanline = 240;
     this.cycle = 340;
-    this.secondaryOAM = [];
+    this.secondaryOAM = [{}, {}, {}, {}, {}, {}, {}, {}];
     this.spritePixels = [];
     this.previousData = 0;
     this.controller = {
@@ -71,9 +72,6 @@ PPU.prototype.clock = function() {
         // cycle 1-64: clear secondary OAM
         if(this.cycle === 1 && this.mask.showSprite) {
             for(var i = 0; i < this.secondaryOAM.length; i++) {
-                if(!this.secondaryOAM[i]) {
-                    this.secondaryOAM[i] = {};
-                }
                 this.secondaryOAM[i].y = 0xff;
                 this.secondaryOAM[i].tileIndex = 0xff;
                 this.secondaryOAM[i].attribute = 0xff;
@@ -554,36 +552,44 @@ PPU.prototype.writeReg = function(addr, value) {
 
 PPU.prototype.readByte = function(addr) {
     addr &= 0x3fff;
-    // name table 0-3
-    if(addr >= 0x2000 && addr < 0x3000) {
-        addr = this.parseMirrorAddr(addr);
+    if(addr < 0x2000) {
+        // Pattern table 0-1
+        return this.nes.mapper.readByte(addr);
+    } else if(addr < 0x3000) {
+        // Nametable 0-3
+        return this.mem[this.parseMirrorAddr(addr) - 0x2000];
+    } else if(addr < 0x3f00) {
+        // Mirrors of $2000-$2EFF
+        return this.mem[this.parseMirrorAddr(addr - 0x1000) - 0x2000];
+    } else {
+        // Palette RAM indexes
+        addr &= 0x3f1f;
+        if(addr >= 0x3f10 && !(addr & 0x03)) {
+            addr -= 0x10;
+        }
+        return this.palettes[addr - 0x3f00];
     }
-    // mirrors of $2000-$2eff
-    if(addr >= 0x3000 && addr < 0x3f00) {
-        addr = this.parseMirrorAddr(addr - 0x1000);
-    }
-    // sprite palette
-    if(addr >= 0x3f10 && !(addr & 0x03)) {
-        addr -= 0x10;
-    }
-    return this.mem[addr];
 };
 
 PPU.prototype.writeByte = function(addr, value) {
     addr &= 0x3fff;
-    // name table 0-3
-    if(addr >= 0x2000 && addr < 0x3000) {
-        addr = this.parseMirrorAddr(addr);
+    if(addr < 0x2000) {
+        // Pattern table 0-1
+        this.nes.mapper.writeByte(addr, value);
+    } else if(addr < 0x3000) {
+        // Nametable 0-3
+        this.mem[this.parseMirrorAddr(addr) - 0x2000] = value;
+    } else if(addr < 0x3f00) {
+        // Mirrors of $2000-$2EFF
+        this.mem[this.parseMirrorAddr(addr - 0x1000) - 0x2000] = value;
+    } else {
+        // Palette RAM indexes
+        addr &= 0x3f1f;
+        if(addr >= 0x3f10 && !(addr & 0x03)) {
+            addr -= 0x10;
+        }
+        this.palettes[addr - 0x3f00] = value;
     }
-    // mirrors of $2000-$2eff
-    if(addr >= 0x3000 && addr < 0x3f00) {
-        addr = this.parseMirrorAddr(addr - 0x1000);
-    }
-    // sprite palette
-    if(addr >= 0x3f10 && !(addr & 0x03)) {
-        addr -= 0x10;
-    }
-    this.mem[addr] = value;
 };
 
 PPU.prototype.parseMirrorAddr = function(addr) {
