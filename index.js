@@ -155,7 +155,7 @@ function parsePalettePixels(buf) {
     return r;
 }
 
-httpGet('./lj65.nes', 'arraybuffer', function(res) {
+httpGet('./mario.nes', 'arraybuffer', function(res) {
     var canvas = document.createElement('canvas');
     canvas.style = 'width: 256px; height: 240px;';
     document.body.appendChild(canvas);

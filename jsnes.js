@@ -479,7 +479,7 @@ var CPU = function(nes) {
     this.crash = null;
     this.irqRequested = null;
     this.irqType = null;
-
+this.lineNum = 0;
     this.reset();
 };
 
@@ -606,7 +606,13 @@ CPU.prototype = {
         // Increment PC by number of op bytes:
         var opaddr = this.REG_PC;
         this.REG_PC += (opinf >> 16) & 0xff;
-
+        
+        if(this.lineNum < 10000) {
+            console.log(this.lineNum++, (this.REG_PC + 1).toString(16), 
+            this.REG_ACC.toString(16), this.REG_X.toString(16), this.REG_Y.toString(16), 
+            this.REG_SP.toString(16), this.getStatus().toString(16));
+        }
+        
         var addr = 0;
         switch (addrMode) {
             case 0:

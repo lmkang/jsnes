@@ -587,7 +587,7 @@ CPU.prototype.step = function(callback) {
         console.log('unknown opcode: $' + this.readByte(this.reg.PC).toString(16));
         return;
     }
-    //console.log(this.reg.PC.toString(16), this.readByte(this.reg.PC).toString(16), opinf);
+    
     var opaddr = this.reg.PC;
     
     // =============test start===============
@@ -809,7 +809,6 @@ CPU.prototype.step = function(callback) {
             this.push2Bytes(this.reg.PC);
             this.flag.B = 1;
             this.pushByte(this.getFlag());
-            this.flag.B = 0;
             this.flag.I = 1;
             this.reg.PC = this.read2Bytes(0xfffe);
             this.reg.PC--;
