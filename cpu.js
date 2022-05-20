@@ -1,7 +1,7 @@
 function CPU(nes) {
     nes.cpu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x800);
+    this.mem = new Uint8Array(0x10000);
 }
 
 CPU.prototype = {
@@ -587,7 +587,14 @@ CPU.prototype.step = function(callback) {
         console.log('unknown opcode: $' + this.readByte(this.reg.PC).toString(16));
         return;
     }
-    
+    /*console.log(
+        this.reg.PC.toString(16).toUpperCase(), 
+        this.reg.A.toString(16).toUpperCase(), 
+        this.reg.X.toString(16).toUpperCase(), 
+        this.reg.Y.toString(16).toUpperCase(), 
+        this.getFlag().toString(16).toUpperCase(), 
+        (this.reg.SP & 0xff).toString(16).toUpperCase()
+    );*/
     var opaddr = this.reg.PC;
     
     // =============test start===============
@@ -702,8 +709,9 @@ CPU.prototype.step = function(callback) {
     
     switch(name) {
         case this.ADC:
-            tmp = this.reg.A + this.readByte(addr) + this.flag.C;
-            if(((this.reg.A ^ this.readByte(addr)) & 0x80) === 0
+            add = this.readByte(addr);
+            tmp = this.reg.A + add + this.flag.C;
+            if(((this.reg.A ^ add) & 0x80) === 0
                 && ((this.reg.A ^ tmp) & 0x80) !== 0) {
                 this.flag.V = 1;
             } else {

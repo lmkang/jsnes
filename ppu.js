@@ -1,7 +1,7 @@
 function PPU(nes) {
     nes.ppu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x1000);
+    this.mem = new Uint8Array(0x4000);
     this.palettes = new Uint8Array(0x20);
     this.pixels = new Uint8Array(256 * 240);
     this.oamMem = new Uint8Array(256);
