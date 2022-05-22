@@ -607,11 +607,11 @@ CPU.prototype = {
         var opaddr = this.REG_PC;
         this.REG_PC += (opinf >> 16) & 0xff;
         
-        if(this.lineNum < 10000) {
+        /*if(this.lineNum < 10000) {
             console.log(this.lineNum++, (this.REG_PC + 1).toString(16), 
             this.REG_ACC.toString(16), this.REG_X.toString(16), this.REG_Y.toString(16), 
             this.REG_SP.toString(16), this.getStatus().toString(16));
-        }
+        }*/
         
         var addr = 0;
         switch (addrMode) {
@@ -5786,6 +5786,8 @@ ROM.prototype = {
         this.trainer = (this.header[6] & 4) !== 0;
         this.fourScreen = (this.header[6] & 8) !== 0;
         this.mapperType = (this.header[6] >> 4) | (this.header[7] & 0xf0);
+        console.log('fourScreen: ', this.fourScreen);
+        console.log('mapperType: ', this.mapperType);
         /* TODO
             if (this.batteryRam)
                 this.loadBatteryRam();*/
@@ -7567,5 +7569,5 @@ canvas.width = 256;
 canvas.height = 240;
 canvas.style = 'position: absolute; top: 10%; left: 50%; transform: translate(-50%, -10%);';
 document.body.appendChild(canvas);
-nes_load_url('canvas', './test.nes');
+nes_load_url('canvas', './contra.nes');
 

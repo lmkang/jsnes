@@ -1,7 +1,7 @@
 function PPU(nes) {
     nes.ppu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x4000);
+    this.mem = new Uint8Array(0x1000);
     this.palettes = new Uint8Array(0x20);
     this.pixels = new Uint8Array(256 * 240);
     this.oamMem = new Uint8Array(256);
@@ -214,7 +214,8 @@ PPU.prototype.clock = function() {
 };
 
 PPU.prototype.updateCycle = function() {
-    if(this.status.vblankStarted && this.controller.generateNMI
+    if(this.status.vblankStarted 
+        && this.controller.generateNMI
         && this.nmiDelay-- === 0) {
         // NMI
         this.nes.cpu.nmi();
@@ -241,8 +242,8 @@ PPU.prototype.updateCycle = function() {
         this.status.spriteOverflow = 0;
     }
     if(this.mask.showBackground || this.mask.showSprite) {
-        // mapper.ppuClockHandler
-        
+        // mapper handlePPUClock
+        this.nes.mapper.handlePPUClock(this.scanline, this.cycle);
     }
 };
 
@@ -357,7 +358,7 @@ PPU.prototype.fetchTileData = function() {
 };
 
 PPU.prototype.incHorizontal = function() {
-    if((this.reg.v & 0x001f) === 0x1f) {
+    if((this.reg.v & 0x001f) === 0x001f) {
         this.reg.v &= ~0x001f;
         this.reg.v ^= 0x0400;
     } else {
@@ -453,7 +454,10 @@ PPU.prototype.readReg = function(addr) {
         
         // PPUSTATUS
         case 0x2002:
-            return this.getStatus();
+            data = this.getStatus() | this.previousData;
+            this.status.vblankStarted = 0;
+            this.reg.w = 0;
+            return data;
         
         // OAMADDR
         case 0x2003:
@@ -599,7 +603,8 @@ PPU.prototype.parseMirrorAddr = function(addr) {
         if(this.mirroring) {
             return addr & 0x27ff;
         } else {
-            return (addr & 0x23ff) | (addr & 0x0800 ? 0x0400 : 0);
+            return (addr & 0x23ff) 
+                | (addr & 0x0800 ? 0x0400 : 0);
         }
     }
 };

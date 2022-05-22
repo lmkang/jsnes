@@ -15,10 +15,10 @@ NES.prototype.load = function(buf) {
     // CHR-ROM count(8KB)
     this.chrCount = buf[5];
     // 0-horizontal, 1-vertical
-    this.mirroring = buf[6] & 1 > 0 ? 1 : 0;
-    this.batteryRAM = buf[6] & 2 > 0 ? 1 : 0;
-    this.trainer = buf[6] & 4 > 0 ? 1 : 0;
-    this.fourScreen = buf[6] & 8 > 0 ? 1 : 0;
+    this.mirroring = (buf[6] & 1) > 0 ? 1 : 0;
+    this.batteryRAM = (buf[6] & 2) > 0 ? 1 : 0;
+    this.trainer = (buf[6] & 4) > 0 ? 1 : 0;
+    this.fourScreen = (buf[6] & 8) > 0 ? 1 : 0;
     this.mapperType = (buf[6] >> 4) | (buf[7] & 0xf0);
     
     console.log('mirroring: ' + this.mirroring);
@@ -26,6 +26,8 @@ NES.prototype.load = function(buf) {
     console.log('trainer: ' + this.trainer);
     console.log('fourScreen: ' + this.fourScreen);
     console.log('mapperType: ' + this.mapperType);
+    console.log('prgCount: ' + this.prgCount);
+    console.log('chrCount: ' + this.chrCount);
     
     var offset = 16;
     if(this.trainer) {
@@ -155,7 +157,7 @@ function parsePalettePixels(buf) {
     return r;
 }
 
-httpGet('./mario.nes', 'arraybuffer', function(res) {
+httpGet('./contra.nes', 'arraybuffer', function(res) {
     var canvas = document.createElement('canvas');
     canvas.style = 'width: 256px; height: 240px;';
     document.body.appendChild(canvas);

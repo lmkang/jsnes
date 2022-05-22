@@ -1,7 +1,7 @@
 function CPU(nes) {
     nes.cpu = this;
     this.nes = nes;
-    this.mem = new Uint8Array(0x10000);
+    this.mem = new Uint8Array(0x800);
 }
 
 CPU.prototype = {
@@ -456,7 +456,7 @@ CPU.prototype.clock = function() {
         return;
     }
     if(this.deferCycle === 0) {
-        this.deferCycle = this.step();
+        this.deferCycle += this.step();
     }
     this.deferCycle--;
     this.clocks++;
@@ -727,7 +727,7 @@ CPU.prototype.step = function(callback) {
         case this.AND:
             this.reg.A &= this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
@@ -788,6 +788,9 @@ CPU.prototype.step = function(callback) {
         case this.BMI:
             if(this.flag.N === 1) {
                 cycle += 1;
+                if(this.isCrossPage(this.reg.PC, addr)) {
+                    cycle += 1;
+                }
                 this.reg.PC = addr;
             }
             break;
@@ -813,13 +816,12 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.BRK:
-            this.reg.PC += 2;
             this.push2Bytes(this.reg.PC);
             this.flag.B = 1;
             this.pushByte(this.getFlag());
+            this.flag.B = 0;
             this.flag.I = 1;
             this.reg.PC = this.read2Bytes(0xfffe);
-            this.reg.PC--;
             break;
         
         case this.BVC:
@@ -900,9 +902,9 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.EOR:
-            this.reg.A = (this.readByte(addr) ^ this.reg.A) & 0xff;
+            this.reg.A ^= this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
@@ -920,8 +922,7 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.INY:
-            this.reg.Y++;
-            this.reg.Y &= 0xff;
+            this.reg.Y = (this.reg.Y + 1) & 0xff;
             this.flag.N = (this.reg.Y >> 7) & 1;
             this.flag.Z = this.reg.Y === 0 ? 1 : 0;
             break;
@@ -938,21 +939,21 @@ CPU.prototype.step = function(callback) {
         case this.LDA:
             this.reg.A = this.readByte(addr);
             this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
         case this.LDX:
             this.reg.X = this.readByte(addr);
             this.flag.N = (this.reg.X >> 7) & 1;
-            this.flag.Z = this.reg.X === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
         case this.LDY:
             this.reg.Y = this.readByte(addr);
             this.flag.N = (this.reg.Y >> 7) & 1;
-            this.flag.Z = this.reg.Y === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.Y & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
@@ -968,7 +969,7 @@ CPU.prototype.step = function(callback) {
                 tmp >>= 1;
                 this.writeByte(addr, tmp);
             }
-            this.flag.N = 0;
+            this.flag.N = (tmp >> 7) & 1;
             this.flag.Z = tmp === 0 ? 1 : 0;
             break;
         
@@ -977,10 +978,9 @@ CPU.prototype.step = function(callback) {
             break;
         
         case this.ORA:
-            tmp = (this.readByte(addr) | this.reg.A) & 0xff;
-            this.flag.N = (tmp >> 7) & 1;
-            this.flag.Z = tmp === 0 ? 1 : 0;
-            this.reg.A = tmp;
+            this.reg.A |= this.readByte(addr);
+            this.flag.N = (this.reg.A >> 7) & 1;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             cycle += cycleAdd;
             break;
         
@@ -997,12 +997,11 @@ CPU.prototype.step = function(callback) {
         case this.PLA:
             this.reg.A = this.popByte();
             this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.PLP:
-            tmp = this.popByte();
-            this.setFlag(tmp);
+            this.setFlag(this.popByte());
             this.flag.B = 0;
             break;
         
@@ -1011,13 +1010,13 @@ CPU.prototype.step = function(callback) {
                 tmp = this.reg.A;
                 add = this.flag.C;
                 this.flag.C = (tmp >> 7) & 1;
-                tmp = ((tmp << 1) & 0xff) + add;
+                tmp = (tmp << 1 | add) & 0xff;
                 this.reg.A = tmp;
             } else {
                 tmp = this.readByte(addr);
                 add = this.flag.C;
                 this.flag.C = (tmp >> 7) & 1;
-                tmp = ((tmp << 1) & 0xff) + add;
+                tmp = (tmp << 1 | add) & 0xff;
                 this.writeByte(addr, tmp);
             }
             this.flag.N = (tmp >> 7) & 1;
@@ -1028,41 +1027,36 @@ CPU.prototype.step = function(callback) {
             if(mode === this.ACCUMULATOR) {
                 add = this.flag.C << 7;
                 this.flag.C = this.reg.A & 1;
-                tmp = (this.reg.A >> 1) + add;
+                tmp = this.reg.A >> 1 | add;
                 this.reg.A = tmp;
             } else {
                 tmp = this.readByte(addr);
                 add = this.flag.C << 7;
                 this.flag.C = tmp & 1;
-                tmp = (tmp >> 1) + add;
+                tmp = tmp >> 1 | add;
                 this.writeByte(addr, tmp);
             }
             this.flag.N = (tmp >> 7) & 1;
-            this.flag.Z = tmp === 0 ? 1 : 0;
+            this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.RTI:
-            tmp = this.popByte();
-            this.setFlag(tmp);
+            this.setFlag(this.popByte());
+            this.flag.B = 0;
             this.reg.PC = this.pop2Bytes();
-            if(this.reg.PC === 0xffff) {
-                return;
-            }
             break;
         
         case this.RTS:
             this.reg.PC = this.pop2Bytes() + 1;
-            if(this.reg.PC === 0xffff) {
-                return;
-            }
             break;
         
         case this.SBC:
-            tmp = this.reg.A - this.readByte(addr) - (1 - this.flag.C);
+            add = this.readByte(addr);
+            tmp = this.reg.A - add - (1 - this.flag.C);
             this.flag.N = (tmp >> 7) & 1;
             this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
             if(((this.reg.A ^ tmp) & 0x80) !== 0
-                && ((this.reg.A ^ this.readByte(addr)) & 0x80) !== 0) {
+                && ((this.reg.A ^ add) & 0x80) !== 0) {
                 this.flag.V = 1;
             } else {
                 this.flag.V = 0;
@@ -1098,26 +1092,26 @@ CPU.prototype.step = function(callback) {
         
         case this.TAX:
             this.reg.X = this.reg.A;
-            this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;;
+            this.flag.N = (this.reg.X >> 7) & 1;
+            this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.TAY:
             this.reg.Y = this.reg.A;
-            this.flag.N = (this.reg.A >> 7) & 1;
-            this.flag.Z = this.reg.A === 0 ? 1 : 0;
+            this.flag.N = (this.reg.Y >> 7) & 1;
+            this.flag.Z = (this.reg.Y & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.TSX:
             this.reg.X = this.reg.SP - 0x0100;
-            this.flag.N = (this.reg.SP >> 7) & 1;
-            this.flag.Z = this.reg.X === 0 ? 1 : 0;
+            this.flag.N = (this.reg.X >> 7) & 1;
+            this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.TXA:
             this.reg.A = this.reg.X;
-            this.flag.N = (this.reg.X >> 7) & 1;
-            this.flag.Z = this.reg.X === 0 ? 1 : 0;
+            this.flag.N = (this.reg.A >> 7) & 1;
+            this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
             break;
         
         case this.TXS:
@@ -1127,8 +1121,8 @@ CPU.prototype.step = function(callback) {
         
         case this.TYA:
             this.reg.A = this.reg.Y;
-            this.flag.N = (this.reg.Y >> 7) & 1;
-            this.flag.Z = this.reg.Y === 0 ? 1 : 0;
+            this.flag.N = (this.reg.A >> 7) & 1;
+            this.flag.Z = this.reg.A === 0 ? 1 : 0;
             break;
         
         case this.ALR:
