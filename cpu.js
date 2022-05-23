@@ -428,7 +428,7 @@ CPU.prototype.reset = function() {
     };
     this.suspendCycle = 0;
     this.deferCycle = 8;
-    this.clocks = 0;
+    this.cycle = 0;
 };
 
 CPU.prototype.irq = function() {
@@ -459,7 +459,7 @@ CPU.prototype.clock = function() {
         this.deferCycle += this.step();
     }
     this.deferCycle--;
-    this.clocks++;
+    this.cycle++;
 };
 
 CPU.prototype.isCrossPage = function(addr1, addr2) {
@@ -507,7 +507,7 @@ CPU.prototype.readByte = function(addr) {
         // Controller2
         return controller2.readByte();
     } else if(addr < 0x4018) {
-        // APU: $4000-$4013, $4015, $4017
+        // APU: $4000-$4013, $4015
         return 0;
     } else if(addr < 0x4020) {
         // APU and I/O functionality that is normally disabled
@@ -542,7 +542,7 @@ CPU.prototype.writeByte = function(addr, value) {
             buf[i] = this.readByte(j + i);
         }
         ppu.writeOAM(buf);
-        this.suspendCycle += 513;
+        this.suspendCycle += this.cycle & 0x01 ? 513 : 514;
     } else if(addr === 0x4016) {
         // Controller
         controller1.writeByte(value);
