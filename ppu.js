@@ -479,7 +479,7 @@ PPU.prototype.readReg = function(addr) {
         case 0x2007:
             data = this.readByte(this.reg.v);
             if(this.reg.v <= 0x3eff) {
-                var tmp = this.readBuffer;
+                tmp = this.readBuffer;
                 this.readBuffer = data;
                 data = tmp;
             } else {
