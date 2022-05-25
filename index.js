@@ -145,14 +145,10 @@ var TABLE = [
     0xB3EEFF, 0xDDDDDD, 0x111111, 0x111111,
 ];
 
-function getColor(index) {
-    return TABLE[index];
-}
-
 function parsePalettePixels(buf) {
     var r = new Uint32Array(buf.length);
     for(var i = 0; i < buf.length; i++) {
-        r[i] = getColor(buf[i]);
+        r[i] = TABLE[buf[i]];
     }
     return r;
 }
@@ -195,8 +191,8 @@ httpGet('./contra.nes', 'arraybuffer', function(res) {
             'KeyD': 0x01,
             'Enter': 0x10,
             'ShiftRight': 0x20,
-            'KeyL': 0x80,
-            'KeyK': 0x40
+            'KeyK': 0x80,
+            'KeyJ': 0x40
         };
         var value = keyMap[e.code];
         controller1.pressButton(value, e.type === 'keydown');
