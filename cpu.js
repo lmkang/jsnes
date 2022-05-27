@@ -489,6 +489,20 @@ CPU.prototype.getFlag = function() {
         | (this.flag.N << 7);
 };
 
+CPU.prototype.step = function() {
+    var opaddr = this.reg.PC;
+    var opinf = this.OPDATA[this.readByte(opaddr)]
+    if(!opinf) {
+        console.log('unknown opcode $' + this.readByte(opaddr).toString(16));
+        return;
+    }
+    this.reg.PC += opinf.len;
+    var cycle = opinf.cycle;
+    var data = opinf.mode.bind(this)(opaddr);
+    cycle += opinf.func.bind(this)(data.addr, data.cycle);
+    return cycle;
+};
+
 CPU.prototype.ZERO_PAGE = function(opaddr) {
     return {
         addr: this.readByte(opaddr + 1),
@@ -525,7 +539,7 @@ CPU.prototype.ABSOLUTE = function(opaddr) {
 
 CPU.prototype.ACCUMULATOR = function(opaddr) {
     return {
-        value: this.reg.A,
+        addr: 'A',
         cycle: 0
     };
 };
@@ -617,85 +631,616 @@ CPU.prototype.INDIRECT = function(opaddr) {
     };
 };
 
-CPU.prototype.ADC = function(addr) {
-    
+CPU.prototype.ADC = function(addr, cycle) {
+    var add = this.readByte(addr);
+    var tmp = this.reg.A + add + this.flag.C;
+    if(((this.reg.A ^ add) & 0x80) === 0
+        && ((this.reg.A ^ tmp) & 0x80) !== 0) {
+        this.flag.V = 1;
+    } else {
+        this.flag.V = 0;
+    }
+    this.flag.C = tmp > 0xff ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    this.reg.A = tmp & 0xff;
+    return cycle;
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+CPU.prototype.AND = function(addr, cycle) {
+    this.reg.A &= this.readByte(addr);
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.ASL = function(addr, cycle) {
+    if(addr === 'A') {
+        this.flag.C = (this.reg.A >> 7) & 1;
+        this.reg.A = (this.reg.A << 1) & 0xff;
+        this.flag.N = (this.reg.A >> 7) & 1;
+        this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    } else {
+        tmp = this.readByte(addr);
+        this.flag.C = (tmp >> 7) & 1;
+        tmp = (tmp << 1) & 0xff;
+        this.flag.N = (tmp >> 7) & 1;
+        this.flag.Z = tmp === 0 ? 1 : 0;
+        this.writeByte(addr, tmp);
+    }
+    return 0;
+};
+
+CPU.prototype.BCC = function(addr, cycle) {
+    if(this.flag.C === 0) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BCS = function(addr, cycle) {
+    if(this.flag.C === 1) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BEQ = function(addr, cycle) {
+    if(this.flag.Z === 1) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+           cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BIT = function(addr, cycle) {
+    var tmp = this.readByte(addr);
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.V = (tmp >> 6) & 1;
+    tmp &= this.reg.A;
+    this.flag.Z = tmp === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.BMI = function(addr, cycle) {
+    if(this.flag.N === 1) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BNE = function(addr, cycle) {
+    if(this.flag.Z === 0) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BPL = function(addr, cycle) {
+    if(this.flag.N === 0) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.BRK = function(addr, cycle) {
+    this.push2Bytes(this.reg.PC);
+    this.flag.B = 1;
+    this.pushByte(this.getFlag());
+    this.flag.B = 0;
+    this.flag.I = 1;
+    this.reg.PC = this.read2Bytes(0xfffe);
+    return 0;
+};
+
+CPU.prototype.BVC = function(addr, cycle) {
+    if(this.flag.V === 0) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return 0;
+};
+
+CPU.prototype.BVS = function(addr, cycle) {
+    if(this.flag.V === 1) {
+        cycle += 1;
+        if(this.isCrossPage(this.reg.PC, addr)) {
+            cycle += 1;
+        }
+        this.reg.PC = addr;
+    }
+    return cycle;
+};
+
+CPU.prototype.CLC = function(addr, cycle) {
+    this.flag.C = 0;
+    return 0;
+};
+
+CPU.prototype.CLD = function(addr, cycle) {
+    this.flag.D = 0;
+    return 0;
+};
+
+CPU.prototype.CLI = function(addr, cycle) {
+    this.flag.I = 0;
+    return 0;
+};
+
+CPU.prototype.CLV = function(addr, cycle) {
+    this.flag.V = 0;
+    return 0;
+};
+
+CPU.prototype.CMP = function(addr, cycle) {
+    var tmp = this.reg.A - this.readByte(addr);
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.CPX = function(addr, cycle) {
+    var tmp = this.reg.X - this.readByte(addr);
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.CPY = function(addr, cycle) {
+    var tmp = this.reg.Y - this.readByte(addr);
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.DEC = function(addr, cycle) {
+    var tmp = (this.readByte(addr) - 1) & 0xff;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = tmp === 0 ? 1 : 0;
+    this.writeByte(addr, tmp);
+    return 0;
+};
+
+CPU.prototype.DEX = function(addr, cycle) {
+    this.reg.X = (this.reg.X - 1) & 0xff;
+    this.flag.N = (this.reg.X >> 7) &  1;
+    this.flag.Z = this.reg.X === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.DEY = function(addr, cycle) {
+    this.reg.Y = (this.reg.Y - 1) & 0xff;
+    this.flag.N = (this.reg.Y >> 7) & 1;
+    this.flag.Z = this.reg.Y === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.EOR = function(addr, cycle) {
+    this.reg.A ^= this.readByte(addr);
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.INC = function(addr, cycle) {
+    var tmp = (this.readByte(addr) + 1) & 0xff;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = tmp === 0 ? 1 : 0;
+    this.writeByte(addr, tmp);
+    return 0;
+};
+
+CPU.prototype.INX = function(addr, cycle) {
+    this.reg.X = (this.reg.X + 1) & 0xff;
+    this.flag.N = (this.reg.X >> 7) & 1;
+    this.flag.Z = this.reg.X === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.INY = function(addr, cycle) {
+    this.reg.Y = (this.reg.Y + 1) & 0xff;
+    this.flag.N = (this.reg.Y >> 7) & 1;
+    this.flag.Z = this.reg.Y === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.JMP = function(addr, cycle) {
+    this.reg.PC = addr;
+    return 0;
+};
+
+CPU.prototype.JSR = function(addr, cycle) {
+    this.push2Bytes(this.reg.PC - 1);
+    this.reg.PC = addr;
+    return 0;
+};
+
+CPU.prototype.LDA = function(addr, cycle) {
+    this.reg.A = this.readByte(addr);
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.LDX = function(addr, cycle) {
+    this.reg.X = this.readByte(addr);
+    this.flag.N = (this.reg.X >> 7) & 1;
+    this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.LDY = function(addr, cycle) {
+    this.reg.Y = this.readByte(addr);
+    this.flag.N = (this.reg.Y >> 7) & 1;
+    this.flag.Z = (this.reg.Y & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.LSR = function(addr, cycle) {
+    if(addr === 'A') {
+        var tmp = this.reg.A & 0xff;
+        this.flag.C = tmp & 1;
+        tmp >>= 1;
+        this.reg.A = tmp;
+    } else {
+        var tmp = this.readByte(addr) & 0xff;
+        this.flag.C = tmp & 1;
+        tmp >>= 1;
+        this.writeByte(addr, tmp);
+    }
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = tmp === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.NOP = function(addr, cycle) {
+    // Ignore
+    return 0;
+};
+
+CPU.prototype.ORA = function(addr, cycle) {
+    this.reg.A |= this.readByte(addr);
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.PHA = function(addr, cycle) {
+    this.pushByte(this.reg.A);
+    return 0;
+};
+
+CPU.prototype.PHP = function(addr, cycle) {
+    this.flag.B = 1;
+    this.pushByte(this.getFlag());
+    this.flag.B = 0;
+    return 0;
+};
+
+CPU.prototype.PLA = function(addr, cycle) {
+    this.reg.A = this.popByte();
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.PLP = function(addr, cycle) {
+    this.setFlag(this.popByte());
+    this.flag.B = 0;
+    return 0;
+};
+
+CPU.prototype.ROL = function(addr, cycle) {
+    if(addr === 'A') {
+        var tmp = this.reg.A;
+        var add = this.flag.C;
+        this.flag.C = (tmp >> 7) & 1;
+        tmp = (tmp << 1 | add) & 0xff;
+        this.reg.A = tmp;
+    } else {
+        var tmp = this.readByte(addr);
+        var add = this.flag.C;
+        this.flag.C = (tmp >> 7) & 1;
+        tmp = (tmp << 1 | add) & 0xff;
+        this.writeByte(addr, tmp);
+    }
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = tmp === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.ROR = function(addr, cycle) {
+    if(addr === 'A') {
+        var add = this.flag.C << 7;
+        this.flag.C = this.reg.A & 1;
+        var tmp = this.reg.A >> 1 | add;
+        this.reg.A = tmp;
+    } else {
+        var tmp = this.readByte(addr);
+        var add = this.flag.C << 7;
+        this.flag.C = tmp & 1;
+        tmp = tmp >> 1 | add;
+        this.writeByte(addr, tmp);
+    }
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.RTI = function(addr, cycle) {
+    this.setFlag(this.popByte());
+    this.flag.B = 0;
+    this.reg.PC = this.pop2Bytes();
+    return 0;
+};
+
+CPU.prototype.RTS = function(addr, cycle) {
+    this.reg.PC = this.pop2Bytes() + 1;
+    return 0;
+};
+
+CPU.prototype.SBC = function(addr, cycle) {
+    var add = this.readByte(addr);
+    var tmp = this.reg.A - add - (1 - this.flag.C);
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    if(((this.reg.A ^ tmp) & 0x80) !== 0
+        && ((this.reg.A ^ add) & 0x80) !== 0) {
+        this.flag.V = 1;
+    } else {
+        this.flag.V = 0;
+    }
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.reg.A = tmp & 0xff;
+    return cycle;
+};
+
+CPU.prototype.SEC = function(addr, cycle) {
+    this.flag.C = 1;
+    return 0;
+};
+
+CPU.prototype.SED = function(addr, cycle) {
+    this.flag.D = 1;
+    return 0;
+};
+
+CPU.prototype.SEI = function(addr, cycle) {
+    this.flag.I = 1;
+    return 0;
+};
+
+CPU.prototype.STA = function(addr, cycle) {
+    this.writeByte(addr, this.reg.A);
+    return 0;
+};
+
+CPU.prototype.STX = function(addr, cycle) {
+    this.writeByte(addr, this.reg.X);
+    return 0;
+};
+
+CPU.prototype.STY = function(addr, cycle) {
+    this.writeByte(addr, this.reg.Y);
+    return 0;
+};
+
+CPU.prototype.TAX = function(addr, cycle) {
+    this.reg.X = this.reg.A;
+    this.flag.N = (this.reg.X >> 7) & 1;
+    this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.TAY = function(addr, cycle) {
+    this.reg.Y = this.reg.A;
+    this.flag.N = (this.reg.Y >> 7) & 1;
+    this.flag.Z = (this.reg.Y & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.TSX = function(addr, cycle) {
+    this.reg.X = this.reg.SP - 0x0100;
+    this.flag.N = (this.reg.X >> 7) & 1;
+    this.flag.Z = (this.reg.X & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.TXA = function(addr, cycle) {
+    this.reg.A = this.reg.X;
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = (this.reg.A & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.TXS = function(addr, cycle) {
+    this.reg.SP = this.reg.X + 0x0100;
+    this.reg.SP = 0x0100 | (this.reg.SP & 0xff);
+    return 0;
+};
+
+CPU.prototype.TYA = function(addr, cycle) {
+    this.reg.A = this.reg.Y;
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.ALR = function(addr, cycle) {
+    var tmp = this.reg.A & this.readByte(addr);
+    this.reg.A = tmp >> 1;
+    this.flag.C = tmp & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    this.flag.N = 0;
+    return 0;
+};
+
+CPU.prototype.ANC = function(addr, cycle) {
+    this.reg.A &= this.readByte(addr);
+    this.flag.C = this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.ARR = function(addr, cycle) {
+    var tmp = this.reg.A & this.readByte(addr);
+    this.reg.A = (tmp >> 1) + (this.flag.C << 7);
+    this.flag.N = this.flag.C;
+    this.flag.C = (tmp >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    this.flag.V = ((tmp >> 7) ^ (tmp >> 6)) & 1;
+    return 0;
+};
+
+CPU.prototype.AXS = function(addr, cycle) {
+    var tmp = (this.reg.X & this.reg.A) - this.readByte(addr);
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    if(((this.reg.X ^ tmp) & 0x80) !== 0
+        && ((this.reg.X ^ this.readByte(addr)) & 0x80) !== 0) {
+        this.flag.V = 1;
+    } else {
+        this.flag.V = 0;
+    }
+    this.reg.X = tmp & 0xff;
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.LAX = function(addr, cycle) {
+    this.reg.A = this.reg.X = this.readByte(addr);
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return cycle;
+};
+
+CPU.prototype.SAX = function(addr, cycle) {
+    this.writeByte(addr, this.reg.A & this.reg.X);
+    return 0;
+};
+
+CPU.prototype.DCP = function(addr, cycle) {
+    var tmp = (this.readByte(addr) - 1) & 0xff;
+    this.writeByte(addr, tmp);
+    tmp = this.reg.A - tmp;
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.ISC = function(addr, cycle) {
+    var tmp = (this.readByte(addr) + 1) & 0xff;
+    this.writeByte(addr, tmp);
+    tmp = this.reg.A - tmp - (1 - this.flag.C);
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    if(((this.reg.A ^ tmp) & 0x80) !== 0
+        && ((this.reg.A ^ this.readByte(addr)) & 0x80) !== 0) {
+        this.flag.V = 1;
+    } else {
+        this.flag.V = 0;
+    }
+    this.flag.C = tmp >= 0 ? 1 : 0;
+    this.reg.A = tmp & 0xff;
+    return 0;
+};
+
+CPU.prototype.RLA = function(addr, cycle) {
+    var tmp = this.readByte(addr);
+    var add = this.flag.C;
+    this.flag.C = (tmp >> 7) & 1;
+    tmp = ((tmp << 1) & 0xff) + add;
+    this.writeByte(addr, tmp);
+    this.reg.A &= tmp;
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.RRA = function(addr, cycle) {
+    var tmp = this.readByte(addr);
+    var add = this.flag.C << 7;
+    this.flag.C = tmp & 1;
+    tmp = (tmp >> 1) + add;
+    this.writeByte(addr, tmp);
+    tmp = this.reg.A + this.readByte(addr) + this.flag.C;
+    if(((this.reg.A ^ this.readByte(addr)) & 0x80) === 0
+        && ((this.reg.A ^ tmp) & 0x80) !== 0) {
+        this.flag.V = 1;
+    } else {
+        this.flag.V = 0;
+    }
+    this.flag.C = tmp > 0xff ? 1 : 0;
+    this.flag.N = (tmp >> 7) & 1;
+    this.flag.Z = (tmp & 0xff) === 0 ? 1 : 0;
+    this.reg.A = tmp & 0xff;
+    return 0;
+};
+
+CPU.prototype.SLO = function(addr, cycle) {
+    var tmp = this.readByte(addr);
+    this.flag.C = (tmp >> 7) & 1;
+    tmp = (tmp << 1) & 0xff;
+    this.writeByte(addr, tmp);
+    this.reg.A |= tmp;
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.SRE = function(addr, cycle) {
+    var tmp = this.readByte(addr) & 0xff;
+    this.flag.C = tmp & 1;
+    tmp >>= 1;
+    this.writeByte(addr, tmp);
+    this.reg.A ^= tmp;
+    this.flag.N = (this.reg.A >> 7) & 1;
+    this.flag.Z = this.reg.A === 0 ? 1 : 0;
+    return 0;
+};
+
+CPU.prototype.SKB = function(addr, cycle) {
+    // Do nothing
+    return 0;
+};
+
+CPU.prototype.IGN = function(addr, cycle) {
+    this.readByte(addr);
+    if(mode !== this.INDIRECT_Y) {
+        return cycle;
+    }
+    return 0;
+};
 
 
 
