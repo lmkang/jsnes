@@ -29,7 +29,7 @@ function PPU(nes) {
     this.previousData = 0;
     this.controller = {
         baseNTAddr: 0,
-        vramAddrInc: 1,
+        vramAddrInc: 0,
         spritePTAddr: 0,
         backgroundPTAddr: 0,
         spriteSize: 0,
@@ -125,9 +125,8 @@ PPU.prototype.clock = function() {
             for(var i = 0; i < this.spritePixels.length; i++) {
                 this.spritePixels[i] = 0;
             }
-            var arr = this.secondaryOAM.reverse();
-            for(var i = 0; i < arr.length; i++) {
-                var sprite = arr[i];
+            for(var i = this.secondaryOAM.length - 1; i >= 0; i--) {
+                var sprite = this.secondaryOAM[i];
                 // hidden sprite?
                 if(sprite.y >= 0xef) {
                     continue;
@@ -150,17 +149,17 @@ PPU.prototype.clock = function() {
                 var lowTile = this.readByte(addr);
                 var highTile = this.readByte(addr + 8);
                 // generate sprite pixels
-                for(var i = 0; i < 8; i++) {
-                    var b = flipH ? 0x01 << i : 0x80 >> i;
+                for(var j = 0; j < 8; j++) {
+                    var b = flipH ? 0x01 << j : 0x80 >> j;
                     var bit0 = lowTile & b ? 1 : 0;
                     var bit1 = highTile & b ? 1 : 0;
                     var bit2 = sprite.attribute & 0x01 ? 1 : 0;
                     var bit3 = sprite.attribute & 0x02 ? 1 : 0;
                     var index = bit3 << 3 | bit2 << 2 | bit1 << 1 | bit0;
-                    if(index % 4 === 0 && (this.spritePixels[sprite.x + i] & 0x3f) % 4 !== 0) {
+                    if(index % 4 === 0 && (this.spritePixels[sprite.x + j] & 0x3f) % 4 !== 0) {
                         continue;
                     }
-                    this.spritePixels[sprite.x + i] = index
+                    this.spritePixels[sprite.x + j] = index
                         | (priority ? 0x40 : 0)
                         | (sprite.isZero ? 0x80 : 0);
                 }

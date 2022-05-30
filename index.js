@@ -155,7 +155,8 @@ function parsePalettePixels(buf) {
 
 httpGet('./contra.nes', 'arraybuffer', function(res) {
     var canvas = document.createElement('canvas');
-    canvas.style = 'width: 256px; height: 240px;';
+    canvas.width = 256;
+    canvas.height = 240;
     document.body.appendChild(canvas);
     var ctx = canvas.getContext('2d');
     var imgData = ctx.createImageData(256, 240);

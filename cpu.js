@@ -497,6 +497,9 @@ CPU.prototype.step = function() {
     this.reg.PC += opinf.len;
     var cycle = opinf.cycle;
     var data = opinf.mode.bind(this)(opaddr);
+    if(!isNaN(data.addr)) {
+        data.addr &= 0xffff;
+    }
     cycle += opinf.func.bind(this)(data.addr, data.cycle);
     return cycle;
 };
@@ -523,7 +526,7 @@ CPU.prototype.RELATIVE = function(opaddr) {
 CPU.prototype.IMPLIED = function(opaddr) {
     // Ignore
     return {
-        addr: 0,
+        addr: null,
         cycle: 0
     };
 };
