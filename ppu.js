@@ -602,8 +602,7 @@ PPU.prototype.parseMirrorAddr = function(addr) {
         if(this.mirroring) {
             return addr & 0x27ff;
         } else {
-            return (addr & 0x23ff) 
-                | (addr & 0x0800 ? 0x0400 : 0);
+            return (addr & 0x23ff) | (addr & 0x0800 ? 0x0400 : 0);
         }
     }
 };
