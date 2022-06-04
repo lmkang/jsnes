@@ -427,7 +427,7 @@ CPU.prototype.readByte = function(addr) {
 CPU.prototype.read2Bytes = function(addr) {
     var b1 = this.readByte(addr);
     var b2 = this.readByte(addr + 1);
-    return b1 | b2 << 8;
+    return (b1 | b2 << 8) & 0xffff;
 };
 
 CPU.prototype.writeByte = function(addr, value) {

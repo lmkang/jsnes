@@ -162,15 +162,15 @@ httpGet('./contra.nes', 'arraybuffer', function(res) {
     var imgData = ctx.createImageData(256, 240);
     var buf = new Uint8Array(res);
     var nes = new NES();
-    nes.onFrame = function(buf) {
-        var pixels = parsePalettePixels(buf);
+    nes.onFrame = function(pixels) {
+        var frames = parsePalettePixels(pixels);
         var ptr = 0;
         for(var y = 0; y < 240; y++) {
             for(var x = 0; x < 256; x++) {
                 var offset = y * 256 + x;
-                imgData.data[ptr++] = pixels[offset] >> 16 & 0xff;
-                imgData.data[ptr++] = pixels[offset] >> 8 & 0xff;
-                imgData.data[ptr++] = pixels[offset] & 0xff;
+                imgData.data[ptr++] = frames[offset] >> 16 & 0xff;
+                imgData.data[ptr++] = frames[offset] >> 8 & 0xff;
+                imgData.data[ptr++] = frames[offset] & 0xff;
                 imgData.data[ptr++] = 0xff;
             }
         }
@@ -205,6 +205,8 @@ httpGet('./contra.nes', 'arraybuffer', function(res) {
         var frame = ppu.frame;
         while(1) {
             cpu.clock();
+            ppu.clock();
+            ppu.clock();
             ppu.clock();
             if(frame !== ppu.frame) {
                 break;
