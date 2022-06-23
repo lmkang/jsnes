@@ -1194,10 +1194,7 @@ CPU.prototype.SKB = function(addr, cycle) {
 
 CPU.prototype.IGN = function(addr, cycle) {
     this.readByte(addr);
-    if(mode !== this.INDIRECT_Y) {
-        return cycle;
-    }
-    return 0;
+    return mode !== this.INDIRECT_Y ? cycle : 0;
 };
 
 

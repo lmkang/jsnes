@@ -173,7 +173,7 @@ PPU.prototype.clock = function() {
     // scanline 240-260: do nothing
     
     // scanline 261: pre-render line
-    if(this.cycle === 261) {
+    if(this.scanline === 261) {
         // cycle 0: do nothing
         
         // cycle 1-256: fetch NT, AT, tile
